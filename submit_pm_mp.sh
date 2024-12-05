@@ -8,7 +8,6 @@
 #SBATCH --time=00:30:00
 #SBATCH --image=nersc/pytorch:24.06.02
 #SBATCH --module=gpu,nccl-plugin
-#SBATCH --reservation=sc24_dl_tutorial_2
 #SBATCH -J vit-era5-mp
 #SBATCH -o %x-%j.out
 
