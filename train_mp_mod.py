@@ -148,10 +148,10 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
             )
-
-    # Log model params one time
-    param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    args.tboard_writer.add_scalar('Scaling/Parameters', param_count, 0)
+            # Log model params one time
+            param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            args.tboard_writer.add_scalar('Scaling/Parameters', param_count, 0)
+    
 
     params.num_epochs = params.num_iters // len(train_data_loader)
     iters = 0
