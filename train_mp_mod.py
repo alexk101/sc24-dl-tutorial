@@ -30,21 +30,15 @@ from distributed.helpers import init_params_for_shared_weights
 
 from utils.plots import generate_images
 
-def log_scaling_metrics(model, val_loss, val_rmse, args):
+def log_scaling_metrics(model, val_rmse, args):
     """Log metrics relevant to model scaling analysis"""
     if not hasattr(args, "tboard_writer"):
         return
         
     # Get parameter count
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    
-    # Log basic metrics
-    args.tboard_writer.add_scalar('Scaling/Parameters', param_count, 0)
-    args.tboard_writer.add_scalar('Scaling/ValidationLoss', val_loss, param_count)
-    args.tboard_writer.add_scalar('Scaling/ValidationRMSE', val_rmse, param_count)
-    
     # Log efficiency metrics
-    compute_efficiency = -val_rmse / param_count  # Higher is better
+    compute_efficiency = -val_rmse.cpu().numpy()[0] / param_count  # Higher is better
     memory_usage = torch.cuda.max_memory_allocated() / (1024**3)  # GB
     
     args.tboard_writer.add_scalar('Scaling/ComputeEfficiency', compute_efficiency, param_count)
@@ -154,6 +148,10 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
             )
+
+    # Log model params one time
+    param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    args.tboard_writer.add_scalar('Scaling/Parameters', param_count, 0)
 
     params.num_epochs = params.num_iters // len(train_data_loader)
     iters = 0
@@ -288,9 +286,9 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
             )
+            log_scaling_metrics(model, val_rmse, args)
             args.tboard_writer.flush()
-            log_scaling_metrics(model, val_loss, val_rmse, args)
-
+            
     torch.cuda.synchronize()
     t2 = time.time()
     tottime = t2 - t1
