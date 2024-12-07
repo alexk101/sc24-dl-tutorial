@@ -11,49 +11,25 @@
 #SBATCH -J vit-era5-mp
 #SBATCH -o %x-%j.out
 
+DATADIR=/pscratch/sd/s/shas1693/data/sc24_tutorial_data
+LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
+mkdir -p ${LOGDIR}
+args="${@}"
+
+# scale_depth, scale_heads, scale_dim, job_name
 # Base model size from config
 BASE_DEPTH=12
 BASE_HEADS=8
 BASE_DIM=384
 
-# Scaling factors to test
-SCALES=(1 2 4 8)
-RUNS=(1 2 3)  # Multiple runs for statistical significance
+export HDF5_USE_FILE_LOCKING=FALSE
+export MASTER_ADDR=$(hostname)
+# Reversing order of GPUs to match default CPU affinities from Slurm
+export CUDA_VISIBLE_DEVICES=3,2,1,0
 
-for scale in "${SCALES[@]}"; do
-    for run in "${RUNS[@]}"; do
-        # Calculate scaled dimensions
-        DEPTH=$((BASE_DEPTH * scale))
-        HEADS=$((BASE_HEADS * scale))
-        DIM=$((BASE_DIM * scale))
-        
-        # Calculate required GPUs based on model size
-        if [ $scale -le 2 ]; then
-            NODES=1
-        elif [ $scale -le 4 ]; then
-            NODES=4
-        else
-            NODES=16
-        fi
-        
-        # Create job name
-        JOB_NAME="vit_scale${scale}_run${run}"
-        
-        # Submit job
-        sbatch \
-            --nodes=$NODES \
-            --job-name=$JOB_NAME \
-            --output=logs/%x_%j.out \
-            --error=logs/%x_%j.err \
-            ./submit_pm_mp.sh \
-            --run_num="${run}" \
-            --config=base \
-            --scale_depth=$scale \
-            --scale_heads=$scale \
-            --scale_dim=$scale \
-            --tensor_parallel=$((scale > 1 ? 4 : 1)) \
-            --amp_mode=fp16 \
-            --enable_fused \
-            --enable_jit
-    done
-done
+set -x
+srun -u shifter -V ${DATADIR}:/data -V ${LOGDIR}:/logs \
+    bash -c "
+    source export_DDP_vars.sh
+    ${PROFILE_CMD} python train_mp_mod.py ${args}
+    "

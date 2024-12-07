@@ -30,7 +30,7 @@ from distributed.helpers import init_params_for_shared_weights
 
 from utils.plots import generate_images
 
-def log_scaling_metrics(model, val_loss, val_rmse, throughput, args):
+def log_scaling_metrics(model, val_loss, val_rmse, args):
     """Log metrics relevant to model scaling analysis"""
     if not hasattr(args, "tboard_writer"):
         return
@@ -42,7 +42,6 @@ def log_scaling_metrics(model, val_loss, val_rmse, throughput, args):
     args.tboard_writer.add_scalar('Scaling/Parameters', param_count, 0)
     args.tboard_writer.add_scalar('Scaling/ValidationLoss', val_loss, param_count)
     args.tboard_writer.add_scalar('Scaling/ValidationRMSE', val_rmse, param_count)
-    args.tboard_writer.add_scalar('Scaling/Throughput', throughput, param_count)
     
     # Log efficiency metrics
     compute_efficiency = -val_rmse / param_count  # Higher is better
@@ -290,7 +289,7 @@ def train(params, args, local_rank, world_rank, world_size):
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
             )
             args.tboard_writer.flush()
-            log_scaling_metrics(model, val_loss, val_rmse, throughput, args)
+            log_scaling_metrics(model, val_loss, val_rmse, args)
 
     torch.cuda.synchronize()
     t2 = time.time()
@@ -309,19 +308,19 @@ if __name__ == "__main__":
     # Add to existing ArgumentParser
     parser.add_argument(
         "--scale_depth",
-        type=float,
+        type=int,
         default=1.0,
         help="Scaling factor for number of transformer layers"
     )
     parser.add_argument(
         "--scale_heads",
-        type=float,
+        type=int,
         default=1.0,
         help="Scaling factor for number of attention heads"
     )
     parser.add_argument(
         "--scale_dim",
-        type=float,
+        type=int,
         default=1.0,
         help="Scaling factor for embedding dimension"
     )
@@ -414,6 +413,7 @@ if __name__ == "__main__":
     params.depth = args.scale_depth
     params.num_heads = args.scale_heads
     ########
+    param_str = f"L{args.scale_depth}_H{args.scale_heads}"
 
     # Update config with modified args
     # set up amp
@@ -480,7 +480,7 @@ if __name__ == "__main__":
     # Set up directory
     baseDir = params.expdir
     expDir = os.path.join(
-        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + "/"
+        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_{param_str}" +"/"
     )
     if world_rank == 0:
         if not os.path.isdir(expDir):
