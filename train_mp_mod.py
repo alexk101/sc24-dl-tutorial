@@ -517,7 +517,6 @@ if __name__ == "__main__":
         )
         params.log()
         args.tboard_writer = SummaryWriter(log_dir=os.path.join(expDir, "logs/"))
-        configure_tensorboard_layout(args.tboard_writer)
 
     params.experiment_dir = os.path.abspath(expDir)
 
