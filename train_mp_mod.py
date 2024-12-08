@@ -44,13 +44,11 @@ def log_scaling_metrics(model, val_rmse, args):
     args.tboard_writer.add_scalar('Scaling/ComputeEfficiency', compute_efficiency, param_count)
     args.tboard_writer.add_scalar('Scaling/MemoryUsage', memory_usage, param_count)
 
-def log_embedding_metrics(model, val_loss, val_rmse, args):
+def log_embedding_metrics(embed_dim, val_loss, val_rmse, args):
     """Log metrics specific to embedding dimension scaling"""
     if not hasattr(args, "tboard_writer"):
         return
-    
-    embed_dim = model.embed_dim
-    
+        
     # Memory metrics
     mem_allocated = torch.cuda.max_memory_allocated() / (1024**3)  # GB
     mem_per_dim = mem_allocated / embed_dim
@@ -312,7 +310,7 @@ def train(params, args, local_rank, world_rank, world_size):
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
             )
             log_scaling_metrics(model, val_rmse.cpu().numpy()[0], args)
-            log_embedding_metrics(model, val_loss, val_rmse.cpu().numpy()[0], args)
+            log_embedding_metrics(params.embed_dim, val_loss, val_rmse.cpu().numpy()[0], args)
             args.tboard_writer.flush()
             
     torch.cuda.synchronize()
