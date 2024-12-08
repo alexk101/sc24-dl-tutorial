@@ -519,8 +519,11 @@ if __name__ == "__main__":
 
     # Set up directory
     baseDir = params.expdir
+    # expDir = os.path.join(
+    #     baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_{param_str}" +"/"
+    # )
     expDir = os.path.join(
-        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_{param_str}" +"/"
+        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_emb{args.scale_dim}" +"/"
     )
     if world_rank == 0:
         if not os.path.isdir(expDir):
