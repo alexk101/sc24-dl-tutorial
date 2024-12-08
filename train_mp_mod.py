@@ -30,22 +30,6 @@ from distributed.helpers import init_params_for_shared_weights
 
 from utils.plots import generate_images
 
-def configure_tensorboard_layout(writer):
-    layout = {
-        "Embedding Analysis": {
-            "Quality": [
-                ["Multiline", ["Embedding/ValidationLoss", "Embedding/ValidationRMSE"]]
-            ],
-            "Memory": [
-                ["Multiline", ["Embedding/MemoryUsage", "Embedding/MemoryPerDim"]]
-            ],
-            "Performance": [
-                ["Multiline", ["Embedding/ForwardLatency", "Embedding/MemoryEfficiency"]]
-            ]
-        }
-    }
-    writer.add_custom_scalars(layout)
-    
 def log_scaling_metrics(model, val_rmse, args):
     """Log metrics relevant to model scaling analysis"""
     if not hasattr(args, "tboard_writer"):
