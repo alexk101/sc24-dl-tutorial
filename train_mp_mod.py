@@ -30,6 +30,22 @@ from distributed.helpers import init_params_for_shared_weights
 
 from utils.plots import generate_images
 
+def configure_tensorboard_layout(writer):
+    layout = {
+        "Embedding Analysis": {
+            "Quality": [
+                ["Multiline", ["Embedding/ValidationLoss", "Embedding/ValidationRMSE"]]
+            ],
+            "Memory": [
+                ["Multiline", ["Embedding/MemoryUsage", "Embedding/MemoryPerDim"]]
+            ],
+            "Performance": [
+                ["Multiline", ["Embedding/ForwardLatency", "Embedding/MemoryEfficiency"]]
+            ]
+        }
+    }
+    writer.add_custom_scalars(layout)
+    
 def log_scaling_metrics(model, val_rmse, args):
     """Log metrics relevant to model scaling analysis"""
     if not hasattr(args, "tboard_writer"):
@@ -38,11 +54,36 @@ def log_scaling_metrics(model, val_rmse, args):
     # Get parameter count
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # Log efficiency metrics
-    compute_efficiency = -val_rmse.cpu().numpy()[0] / param_count  # Higher is better
+    compute_efficiency = -val_rmse / param_count  # Higher is better
     memory_usage = torch.cuda.max_memory_allocated() / (1024**3)  # GB
     
     args.tboard_writer.add_scalar('Scaling/ComputeEfficiency', compute_efficiency, param_count)
     args.tboard_writer.add_scalar('Scaling/MemoryUsage', memory_usage, param_count)
+
+def log_embedding_metrics(model, val_loss, val_rmse, args):
+    """Log metrics specific to embedding dimension scaling"""
+    if not hasattr(args, "tboard_writer"):
+        return
+    
+    embed_dim = model.embed_dim
+    
+    # Memory metrics
+    mem_allocated = torch.cuda.max_memory_allocated() / (1024**3)  # GB
+    mem_per_dim = mem_allocated / embed_dim
+    
+    # Performance metrics
+    forward_time = args.forward_time_avg if hasattr(args, 'forward_time_avg') else 0
+    
+    # Log metrics vs embedding dimension
+    args.tboard_writer.add_scalar('Embedding/ValidationLoss', val_loss, embed_dim)
+    args.tboard_writer.add_scalar('Embedding/ValidationRMSE', val_rmse, embed_dim)
+    args.tboard_writer.add_scalar('Embedding/MemoryUsage', mem_allocated, embed_dim)
+    args.tboard_writer.add_scalar('Embedding/MemoryPerDim', mem_per_dim, embed_dim)
+    args.tboard_writer.add_scalar('Embedding/ForwardLatency', forward_time, embed_dim)
+    
+    # Log efficiency metric (RMSE reduction per memory)
+    memory_efficiency = -val_rmse / mem_allocated
+    args.tboard_writer.add_scalar('Embedding/MemoryEfficiency', memory_efficiency, embed_dim)
 
 
 def train(params, args, local_rank, world_rank, world_size):
@@ -286,7 +327,8 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
             )
-            log_scaling_metrics(model, val_rmse, args)
+            log_scaling_metrics(model, val_rmse.cpu().numpy()[0], args)
+            log_embedding_metrics(model, val_loss, val_rmse.cpu().numpy()[0], args)
             args.tboard_writer.flush()
             
     torch.cuda.synchronize()
@@ -488,6 +530,7 @@ if __name__ == "__main__":
         )
         params.log()
         args.tboard_writer = SummaryWriter(log_dir=os.path.join(expDir, "logs/"))
+        configure_tensorboard_layout(args.tboard_writer)
 
     params.experiment_dir = os.path.abspath(expDir)
 

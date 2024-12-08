@@ -20,6 +20,7 @@ args="${@}"
 # Base model size from config
 BASE_DEPTH=12
 BASE_HEADS=8
+# 384, 576, 768, 1024
 BASE_DIM=384
 
 export HDF5_USE_FILE_LOCKING=FALSE
