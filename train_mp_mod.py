@@ -109,7 +109,6 @@ def train(params, args, local_rank, world_rank, world_size):
 
     # get data loader
     logging.info("rank %d, begin data loader init" % world_rank)
-    data_subset(params.n_valid)
 
     train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(
         params, str(temp_train), params.distributed, train=True
@@ -356,7 +355,6 @@ def train(params, args, local_rank, world_rank, world_size):
     t2 = time.time()
     tottime = t2 - t1
     pynvml.nvmlShutdown()
-    clean_up_temp_dirs()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -552,7 +550,7 @@ if __name__ == "__main__":
     #     baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_{param_str}" +"/"
     # )
     expDir = os.path.join(
-        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_emb{args.scale_dim}" +"/"
+        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_emb{args.scale_dim}_val{args.n_valid}" +"/"
     )
     if world_rank == 0:
         if not os.path.isdir(expDir):
@@ -565,7 +563,13 @@ if __name__ == "__main__":
 
     params.experiment_dir = os.path.abspath(expDir)
 
+    if world_rank == 0:
+        data_subset(params.n_valid)
+
     train(params, args, local_rank, world_rank, world_size)
+
+    if world_rank == 0:
+        clean_up_temp_dirs()
 
     if params.distributed:
         torch.distributed.barrier()
