@@ -12,7 +12,6 @@ import torch.multiprocessing
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import ReduceOp
-from fvcore.nn import FlopCountAnalysis
 
 import logging
 from utils import logging_utils
@@ -286,8 +285,8 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_figure("Visualization, t2m", fig, iters, close=True)
         
             # FLOP
-            flops = FlopCountAnalysis(model, next(iter(train_data_loader))[0].to(device))
-            args.tboard_writer.add_scalar('Scaling/FLOPs', flops.total(), 0)
+            # flops = FlopCountAnalysis(model, next(iter(train_data_loader))[0].to(device))
+            # args.tboard_writer.add_scalar('Scaling/FLOPs', flops.total(), 0)
             # adjust_iterations_for_budget(flops, params)
 
 
