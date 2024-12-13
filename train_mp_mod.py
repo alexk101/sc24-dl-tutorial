@@ -6,13 +6,13 @@ import argparse
 import pynvml
 
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.cuda.amp import autocast, GradScaler
 import torch.multiprocessing
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import ReduceOp
+from fvcore.nn import FlopCountAnalysis
 
 import logging
 from utils import logging_utils
@@ -29,6 +29,17 @@ from distributed.mappings import init_ddp_model_and_reduction_hooks
 from distributed.helpers import init_params_for_shared_weights
 
 from utils.plots import generate_images
+
+def get_data_loader_with_subset(params, train=True, subset_fraction=1.0):
+    data_loader, dataset, sampler = get_data_loader_distributed(
+        params, params.train_data_path if train else params.valid_data_path, 
+        params.distributed, train=train
+    )
+    if subset_fraction < 1.0:
+        subset_size = int(len(dataset) * subset_fraction)
+        dataset = torch.utils.data.Subset(dataset, range(subset_size))
+        data_loader = torch.utils.data.DataLoader(dataset, batch_size=params.local_batch_size, shuffle=train)
+    return data_loader 
 
 def log_scaling_metrics(model, val_rmse, args):
     """Log metrics relevant to model scaling analysis"""
@@ -179,6 +190,7 @@ def train(params, args, local_rank, world_rank, world_size):
     params.num_epochs = params.num_iters // len(train_data_loader)
     iters = 0
     t1 = time.time()
+    # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         if params.distributed and (train_sampler is not None):
@@ -272,6 +284,12 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_scalar("Avg samples per sec", samples_per_sec, iters)
             fig = generate_images([inp, tar, gen])
             args.tboard_writer.add_figure("Visualization, t2m", fig, iters, close=True)
+        
+            # FLOP
+            flops = FlopCountAnalysis(model, next(iter(train_data_loader))[0].to(device))
+            args.tboard_writer.add_scalar('Scaling/FLOPs', flops.total(), 0)
+            # adjust_iterations_for_budget(flops, params)
+
 
         val_start = time.time()
         val_loss = torch.zeros(1, device=device)
@@ -281,6 +299,7 @@ def train(params, args, local_rank, world_rank, world_size):
         valid_steps = 0
         model.eval()
 
+        # Validation
         with torch.inference_mode():
             with torch.no_grad():
                 for i, data in enumerate(val_data_loader, 0):

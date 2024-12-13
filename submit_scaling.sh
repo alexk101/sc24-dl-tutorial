@@ -28,6 +28,9 @@ export MASTER_ADDR=$(hostname)
 # Reversing order of GPUs to match default CPU affinities from Slurm
 export CUDA_VISIBLE_DEVICES=3,2,1,0
 
+# Used to log flops
+pip install -U fvcore
+
 set -x
 srun -u shifter -V ${DATADIR}:/data -V ${LOGDIR}:/logs \
     bash -c "

@@ -162,7 +162,10 @@ def fit_scaling_laws(df):
     print(f"Throughput scales with N^{thru_exp:.3f}")
 
 if __name__ == '__main__':
-    results_df = extract_metrics('/Users/alexdev/Documents/research/phd/projects/sc24-dl-tutorial')
+    
+    # target = '/Users/alexdev/Documents/research/phd/projects/sc24-dl-tutorial'
+    target = '/home/alexk101/sc24-dl-tutorial'
+    results_df = extract_metrics(target)
     plot_analysis(results_df)
     plot_scaling_analysis(results_df)
     fit_scaling_laws(results_df)
