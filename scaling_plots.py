@@ -94,11 +94,22 @@ def __(EventAccumulator, Path, defaultdict, glob, pl, plt, sns):
             val_loss = [x.value for x in ea.Scalars('Loss/valid')]
             train_loss = [x.value for x in ea.Scalars('Loss/train')]
             
+
             ts['run'] += [run_num]*len(rmse)
-            ts['rmse'] += rmse
-            ts['epoch'] += range(1,len(rmse)+1)
-            ts['train_loss'] += val_loss
-            ts['val_loss'] += train_loss
+            ts['series'] += ['rmse'] * len(rmse)
+            ts['val'] += rmse
+            ts['epoch'] += range(1, 1+len(rmse))
+            
+
+            ts['run'] += [run_num]*len(train_loss)
+            ts['series'] += ['train_loss']*len(train_loss)
+            ts['val'] += train_loss
+            ts['epoch'] += range(1, 1+len(train_loss))
+
+            ts['run'] += [run_num]*len(val_loss)
+            ts['series'] += ['val_loss']*len(val_loss)
+            ts['val'] += val_loss
+            ts['epoch'] += range(1, 1+len(val_loss))
 
             results.append({
                 'run': run_num,
@@ -151,6 +162,11 @@ def __(ts_df):
 
 
 @app.cell
+def __():
+    return
+
+
+@app.cell
 def __(plot_analysis, results_df):
     plot_analysis(results_df)
     return
@@ -166,38 +182,14 @@ def __(results_df, ts_df):
 @app.cell
 def __(all_data, pl, sns):
     all_embedding = all_data.filter(pl.col('run').str.contains('emb'))
-    sns.relplot(all_embedding, x='epoch', y='rmse', hue='embed_dim', kind='line')
+    all_embedding = all_embedding.filter(~pl.col('embed_dim').is_in([384, 768, 576]))
+    sns.relplot(all_embedding, x='epoch', y='val', col='series', hue='embed_dim', kind='line')
     return (all_embedding,)
 
 
 @app.cell
 def __(all_embedding, sns):
-    sns.relplot(all_embedding, x='epoch', y='train_loss', hue='embed_dim', kind='line')
-    return
-
-
-@app.cell
-def __(all_embedding, sns):
-    sns.relplot(all_embedding, x='epoch', y='val_loss', hue='embed_dim', kind='line')
-    return
-
-
-@app.cell
-def __(all_data, pl, sns):
-    scaling = all_data.filter(~pl.col('run').str.contains('emb'))
-    sns.relplot(scaling, x='epoch', y='rmse', hue='depth', kind='line')
-    return (scaling,)
-
-
-@app.cell
-def __(scaling, sns):
-    sns.relplot(scaling, x='epoch', y='train_loss', hue='depth', kind='line')
-    return
-
-
-@app.cell
-def __(scaling, sns):
-    sns.relplot(scaling, x='epoch', y='val_loss', hue='depth', kind='line')
+    sns.relplot(all_embedding, x='epoch', y='val', col='series', hue='embed_dim', kind='line')
     return
 
 

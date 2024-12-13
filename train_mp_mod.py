@@ -28,17 +28,36 @@ from distributed.mappings import init_ddp_model_and_reduction_hooks
 from distributed.helpers import init_params_for_shared_weights
 
 from utils.plots import generate_images
+from pathlib import Path
 
-def get_data_loader_with_subset(params, train=True, subset_fraction=1.0):
-    data_loader, dataset, sampler = get_data_loader_distributed(
-        params, params.train_data_path if train else params.valid_data_path, 
-        params.distributed, train=train
-    )
-    if subset_fraction < 1.0:
-        subset_size = int(len(dataset) * subset_fraction)
-        dataset = torch.utils.data.Subset(dataset, range(subset_size))
-        data_loader = torch.utils.data.DataLoader(dataset, batch_size=params.local_batch_size, shuffle=train)
-    return data_loader 
+scratch = os.getenv("SCRATCH")
+temp_train = Path(f"{scratch}/temp_train")
+temp_train.mkdir(exist_ok=True)
+temp_val = Path(f"{scratch}/temp_val")
+temp_val.mkdir(exist_ok=True)
+
+def data_subset(n_valid: int=1):
+    target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
+    all_data = list((target/'train').iterdir())
+    all_data += list((target/'valid').iterdir())
+    sorted(all_data)
+    train_subset = all_data[:n_valid]
+    valid_subset = all_data[n_valid:]
+
+    for x in train_subset:
+        os.symlink(x, temp_train/x.name)
+    
+    for x in valid_subset:
+        os.symlink(x, temp_val/x.name)
+
+
+def clean_up_temp_dirs():
+    for x in temp_train.iterdir():
+        os.unlink(x)
+
+    for x in temp_val.iterdir():
+        os.unlink(x)
+
 
 def log_scaling_metrics(model, val_rmse, args):
     """Log metrics relevant to model scaling analysis"""
@@ -90,11 +109,13 @@ def train(params, args, local_rank, world_rank, world_size):
 
     # get data loader
     logging.info("rank %d, begin data loader init" % world_rank)
+    data_subset(params.n_valid)
+
     train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(
-        params, params.train_data_path, params.distributed, train=True
+        params, str(temp_train), params.distributed, train=True
     )
     val_data_loader, valid_dataset = get_data_loader_distributed(
-        params, params.valid_data_path, params.distributed, train=False
+        params, str(temp_train), params.distributed, train=False
     )
     logging.info("rank %d, data loader initialized" % (world_rank))
 
@@ -335,6 +356,7 @@ def train(params, args, local_rank, world_rank, world_size):
     t2 = time.time()
     tottime = t2 - t1
     pynvml.nvmlShutdown()
+    clean_up_temp_dirs()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -363,6 +385,12 @@ if __name__ == "__main__":
         type=int,
         default=1.0,
         help="Scaling factor for embedding dimension"
+    )
+    parser.add_argument(
+        "--n_valid",
+        type=int,
+        default=1.0,
+        help="Number of years to use for validation"
     )
     #########################
     parser.add_argument(
@@ -452,6 +480,7 @@ if __name__ == "__main__":
     params.embed_dim = args.scale_dim
     params.depth = args.scale_depth
     params.num_heads = args.scale_heads
+    params.n_valid = args.n_valid
     ########
     param_str = f"L{args.scale_depth}_H{args.scale_heads}"
 
