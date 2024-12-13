@@ -42,8 +42,8 @@ def data_subset(n_valid: int=1):
     train_subset = all_data[:n_valid]
     valid_subset = all_data[n_valid:]
 
-    (temp_train/n_valid).mkdir(exist_ok=True, parents=True)
-    (temp_val/n_valid).mkdir(exist_ok=True, parents=True)
+    (temp_train/str(n_valid)).mkdir(exist_ok=True, parents=True)
+    (temp_val/str(n_valid)).mkdir(exist_ok=True, parents=True)
 
     for x in train_subset:
         os.symlink(x, temp_train/str(n_valid)/x.name)
@@ -551,7 +551,7 @@ if __name__ == "__main__":
     #     baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_{param_str}" +"/"
     # )
     expDir = os.path.join(
-        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_emb{args.scale_dim}_val{args.n_valid}" +"/"
+        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_emb{args.scale_dim}_val{str(args.n_valid)}" +"/"
     )
     if world_rank == 0:
         if not os.path.isdir(expDir):
