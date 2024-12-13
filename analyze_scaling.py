@@ -5,6 +5,27 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import seaborn as sns
+from pathlib import Path
+import polars as pl
+
+def get_config_details(run_path):
+    """Parse config string like 'dim128_depth6_heads4' into dict"""
+
+    run_name = run_path.parent.stem
+    if 'L' in run_name:
+        emb = 384
+        layers = int(run_name.split('_')[1][1:])
+        heads = int(run_name.split('_')[2][1:])
+    else:
+        emb = int(run_name.split('_')[1][3:])
+        layers = 12
+        heads = 8
+
+    return {
+        'embed_dim': emb,
+        'depth': layers,
+        'num_heads': heads
+    }
 
 def count_parameters(config):
     """Calculate total trainable parameters for a given config"""
@@ -25,38 +46,57 @@ def extract_metrics(logdir):
     """Extract metrics from tensorboard logs"""
     results = []
     
-    for run_dir in glob.glob(f"{logdir}/**/logs", recursive=True):
+    for run_dir in glob.glob(f"{logdir}/**/logs", recursive=True)[1:]:
+        run_path = Path(run_dir)
         ea = EventAccumulator(run_dir)
         ea.Reload()
         
-        config = run_dir.split('/')[-3]
         run_num = run_dir.split('/')[-2]
         
-        try:
-            # Get final metrics
-            final_val_loss = ea.Scalars('Loss/valid')[-1].value
-            final_rmse = ea.Scalars('RMSE(u10m)/valid')[-1].value
+        # Get final metrics
+        final_val_loss = ea.Scalars('Loss/valid')[-1].value
+        final_rmse = ea.Scalars('RMSE(u10m)/valid')[-1].value
+        if 'Avg samples per sec' not in ea.scalars.Keys():
+            throughput = 0
+        else:
             throughput = ea.Scalars('Avg samples per sec')[-1].value
-            
-            # Get config details
-            config_details = get_config_details(config)
-            param_count = count_parameters(config_details)
-            
-            results.append({
-                'config': config,
-                'run': run_num,
-                'parameters': param_count,
-                'val_loss': final_val_loss,
-                'rmse': final_rmse,
-                'throughput': throughput,
-                'embed_dim': config_details['embed_dim'],
-                'depth': config_details['depth'],
-                'num_heads': config_details['num_heads']
-            })
-        except:
-            print(f"Skipping incomplete run: {run_dir}")
+        
+        # Get config details
+        config_details = get_config_details(run_path)
+        param_count = count_parameters(config_details)
+
+        results.append({
+            'run': run_num,
+            'parameters': param_count,
+            'val_loss': final_val_loss,
+            'rmse': final_rmse,
+            'throughput': throughput,
+            'embed_dim': config_details['embed_dim'],
+            'depth': config_details['depth'],
+            'num_heads': config_details['num_heads']
+        })
     
     return pd.DataFrame(results)
+
+def plot_analysis(df):
+    pl_df = pl.from_pandas(df)
+    print(pl_df)
+    print(pl_df.filter(pl.col('throughput')==0.0))
+    print(pl_df.filter(pl.col('throughput')!=0.0))
+    embedding = pl_df.filter(pl.col('run').str.contains('emb'))
+    print(embedding)
+
+    fig, axes = plt.subplots(1,3)
+    sns.barplot(embedding, x='embed_dim', y='throughput', ax=axes[0])
+    axes[0].set_title('embed_dim vs throughput')
+    sns.barplot(embedding, x='embed_dim', y='val_loss', ax=axes[1])
+    axes[1].set_title('embed_dim vs val_loss')
+    sns.barplot(embedding, x='embed_dim', y='rmse', ax=axes[2])
+    axes[2].set_title('embed_dim vs rmse')
+
+    params = pl_df.filter(~pl.col('run').str.contains('emb'))
+    sns.catplot(params, x='num_heads', y='rmse', col='depth', kind='bar')
+    plt.show()
 
 def plot_scaling_analysis(df):
     """Generate comprehensive scaling analysis plots"""
@@ -122,6 +162,7 @@ def fit_scaling_laws(df):
     print(f"Throughput scales with N^{thru_exp:.3f}")
 
 if __name__ == '__main__':
-    results_df = extract_metrics('/path/to/logs')
+    results_df = extract_metrics('/Users/alexdev/Documents/research/phd/projects/sc24-dl-tutorial')
+    plot_analysis(results_df)
     plot_scaling_analysis(results_df)
     fit_scaling_laws(results_df)
