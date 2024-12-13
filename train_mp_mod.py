@@ -32,9 +32,7 @@ from pathlib import Path
 
 scratch = os.getenv("SCRATCH")
 temp_train = Path(f"{scratch}/temp_train")
-temp_train.mkdir(exist_ok=True)
 temp_val = Path(f"{scratch}/temp_val")
-temp_val.mkdir(exist_ok=True)
 
 def data_subset(n_valid: int=1):
     target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
@@ -44,18 +42,21 @@ def data_subset(n_valid: int=1):
     train_subset = all_data[:n_valid]
     valid_subset = all_data[n_valid:]
 
+    (temp_train/n_valid).mkdir(exist_ok=True, parents=True)
+    (temp_val/n_valid).mkdir(exist_ok=True, parents=True)
+
     for x in train_subset:
-        os.symlink(x, temp_train/x.name)
+        os.symlink(x, temp_train/str(n_valid)/x.name)
     
     for x in valid_subset:
-        os.symlink(x, temp_val/x.name)
+        os.symlink(x, temp_val/str(n_valid)/x.name)
 
 
-def clean_up_temp_dirs():
-    for x in temp_train.iterdir():
+def clean_up_temp_dirs(n_valid: int):
+    for x in (temp_train/str(n_valid)).iterdir():
         os.unlink(x)
 
-    for x in temp_val.iterdir():
+    for x in (temp_val/str(n_valid)).iterdir():
         os.unlink(x)
 
 
@@ -111,10 +112,10 @@ def train(params, args, local_rank, world_rank, world_size):
     logging.info("rank %d, begin data loader init" % world_rank)
 
     train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(
-        params, str(temp_train), params.distributed, train=True
+        params, str(temp_train/str(params.n_valid)), params.distributed, train=True
     )
     val_data_loader, valid_dataset = get_data_loader_distributed(
-        params, str(temp_train), params.distributed, train=False
+        params, str(temp_val/str(params.n_valid)), params.distributed, train=False
     )
     logging.info("rank %d, data loader initialized" % (world_rank))
 
@@ -569,7 +570,7 @@ if __name__ == "__main__":
     train(params, args, local_rank, world_rank, world_size)
 
     if world_rank == 0:
-        clean_up_temp_dirs()
+        clean_up_temp_dirs(params.n_valid)
 
     if params.distributed:
         torch.distributed.barrier()
