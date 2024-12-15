@@ -240,7 +240,7 @@ if __name__ == "__main__":
         logging_utils.log_to_file(
             logger_name=None, log_filename=os.path.join(expDir, "out.log")
         )
-        params.log()
+        # params.log()
         args.tboard_writer = SummaryWriter(log_dir=os.path.join(str(expDir), "logs/"))
         
         hparams = {
