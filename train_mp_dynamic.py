@@ -234,6 +234,18 @@ if __name__ == "__main__":
     params.budget = args.budget
     params.num_iters = args.num_iters
 
+    if args.local_batch_size:
+        # Manually override batch size
+        params.local_batch_size = args.local_batch_size
+        params.update(
+            {"global_batch_size": comm.get_size("dp") * args.local_batch_size}
+        )
+    else:
+        # Compute local batch size based on number of ranks
+        params.local_batch_size = int(
+            params["global_batch_size"] // comm.get_size("dp")
+        )
+        
     # for data loader, set the actual number of data shards and id
     params.data_num_shards = comm.get_size("dp")
     params.data_shard_id = comm.get_rank("dp")
