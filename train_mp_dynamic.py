@@ -114,6 +114,11 @@ def train(params, args, local_rank, world_rank, world_size):
         max_steps = int(params.budget // (6 * param_count * tokens_per_step))
         params.num_iters = max_steps // (params.global_batch_size * seq_len)
 
+    if params.enable_fused:
+        optimizer = optim.Adam(model.parameters(), lr=params.lr, fused=True, betas=(0.9, 0.95))
+    else:
+        optimizer = optim.Adam(model.parameters(), lr=params.lr, betas=(0.9, 0.95))
+
     if params.lr_schedule == "cosine":
         if params.warmup > 0:
             lr_scale = lambda x: min(
@@ -127,8 +132,6 @@ def train(params, args, local_rank, world_rank, world_size):
             )
     else:
         scheduler = None
-
-    optimizer = optim.Adam(model.parameters(), lr=params.lr, betas=(0.9, 0.95))
 
     if world_rank == 0:
         logging.info(model)
