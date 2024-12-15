@@ -28,6 +28,7 @@ from networks import vit
 from distributed.mappings import init_ddp_model_and_reduction_hooks
 from distributed.helpers import init_params_for_shared_weights
 from pathlib import Path
+import json
 
 scratch = os.getenv("SCRATCH")
 temp_train = Path(f"{scratch}/temp_train")
@@ -251,7 +252,8 @@ if __name__ == "__main__":
             'dtype': str(amp_dtype),
             'compute_budget': args.budget
         }
-        args.tboard_writer.add_hparams(hparams)
+        with open(expDir/'hparams.json', "w") as f:
+            json.dump(hparams, f)
 
     train(params, args, local_rank, world_rank, world_size)
 
