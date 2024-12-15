@@ -114,6 +114,7 @@ def train(params, args, local_rank, world_rank, world_size):
         max_steps = int(params.budget // (6 * param_count * tokens_per_step))
         params.num_iters = max_steps // (params.global_batch_size * seq_len)
 
+
     if params.enable_fused:
         optimizer = optim.Adam(model.parameters(), lr=params.lr, fused=True, betas=(0.9, 0.95))
     else:
@@ -191,7 +192,6 @@ if __name__ == "__main__":
     parser.add_argument("--amp_mode", default="none", type=str, choices=["none", "fp16", "bf16"], help="select automatic mixed precision mode")
     parser.add_argument("--enable_fused", action="store_true", help="enable fused Adam optimizer")
     parser.add_argument("--enable_jit", action="store_true", help="enable JIT compilation")
-    parser.add_argument("--num_iters", default=None, type=int, help="number of iterations to run")
     parser.add_argument("--budget", default=0.0, type=float, help="compute budget in flops")
     parser.add_argument("--n_train", default=25, type=int, help="number of training years")
     parser.add_argument("--local_batch_size", default=None, type=int, help="local batchsize (manually override global_batch_size config setting)",)
@@ -239,7 +239,6 @@ if __name__ == "__main__":
     params.num_heads = args.scale_heads
     params.n_train = args.n_train
     params.budget = args.budget
-    params.num_iters = args.num_iters
     params.amp_enabled = amp_dtype is not torch.float32
     params.amp_dtype = amp_dtype
     params.enable_fused = args.enable_fused
