@@ -207,9 +207,15 @@ if __name__ == "__main__":
 
     # Directory setup
     baseDir = Path(params.expdir)
+    baseDir.mkdir(exist_ok=True, parents=True)
+    
     existing = [int(x.name) for x in baseDir.iterdir()]
-    run_num = str(max(existing)).zfill()
+    if existing:
+        run_num = str(max(existing)).zfill(4)
+    else:
+        run_num = '000'
     expDir: Path = baseDir / run_num
+    expDir.mkdir(exist_ok=True, parents=True)
 
     # Hyperparams
     params.embed_dim = args.scale_dim
@@ -236,7 +242,7 @@ if __name__ == "__main__":
     if world_rank == 0:
         # Setup data
         data_subset(params.n_train)
-        expDir.mkdir(exist_ok=True, parents=True)
+        
         logging_utils.log_to_file(
             logger_name=None, log_filename=os.path.join(expDir, "out.log")
         )
