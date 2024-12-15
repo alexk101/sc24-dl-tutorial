@@ -233,6 +233,10 @@ if __name__ == "__main__":
     params.n_train = args.n_train
     params.budget = args.budget
     params.num_iters = args.num_iters
+    params.amp_enabled = amp_dtype is not torch.float32
+    params.amp_dtype = amp_dtype
+    params.enable_fused = args.enable_fused
+    params.enable_jit = args.enable_jit
 
     if args.local_batch_size:
         # Manually override batch size
@@ -245,7 +249,7 @@ if __name__ == "__main__":
         params.local_batch_size = int(
             params["global_batch_size"] // comm.get_size("dp")
         )
-        
+
     # for data loader, set the actual number of data shards and id
     params.data_num_shards = comm.get_size("dp")
     params.data_shard_id = comm.get_rank("dp")
