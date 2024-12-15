@@ -74,8 +74,8 @@ def train(params, args, local_rank, world_rank, world_size):
 
     # Get data loader
     logging.info("rank %d, begin data loader init" % world_rank)
-    train_data_loader = get_data_loader_distributed(params, params.train_data_path, params.distributed, train=True)
-    val_data_loader = get_data_loader_distributed(params, params.valid_data_path, params.distributed, train=False)
+    train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(params, params.train_data_path, params.distributed, train=True)
+    val_data_loader, valid_dataset  = get_data_loader_distributed(params, params.valid_data_path, params.distributed, train=False)
     logging.info("rank %d, data loader initialized" % world_rank)
 
     # Create model
@@ -94,6 +94,12 @@ def train(params, args, local_rank, world_rank, world_size):
         model = init_ddp_model_and_reduction_hooks(model, device_ids=[local_rank],
                                                    output_device=[local_rank],
                                                    bucket_cap_mb=args.bucket_cap_mb)
+
+    # select loss function
+    if params.enable_jit:
+        loss_func = l2_loss_opt
+    else:
+        loss_func = l2_loss
 
     # Calculate iterations for budget
     if params.budget:
@@ -140,7 +146,7 @@ def train(params, args, local_rank, world_rank, world_size):
             optimizer.zero_grad()
             with autocast('cuda', enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
-                loss = l2_loss(gen, tar)
+                loss = loss_func(gen, tar)
 
             if params.amp_dtype == torch.float16:
                 scaler.scale(loss).backward()
@@ -183,10 +189,21 @@ if __name__ == "__main__":
     parser.add_argument("--num_iters", default=None, type=int, help="number of iterations to run")
     parser.add_argument("--budget", default=0.0, type=float, help="compute budget in flops")
     parser.add_argument("--n_train", default=25, type=int, help="number of training years")
+    # model parallelism arguments
+    parser.add_argument("--tensor_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
+    parser.add_argument("--context_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
+    parser.add_argument("--parallel_order", default="tp-cp-dp", type=str, help="Order of ranks for parallelism",)
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
     
+    # setup model parallel sizes
+    params["tp"] = args.tensor_parallel
+    params["cp"] = args.context_parallel
+    params["order"] = args.parallel_order
+    # initialize comm
+    comm.init(params, verbose=True)
+
     # Setup comm variables
     local_rank = comm.get_local_rank()
     world_rank = comm.get_world_rank()
@@ -259,3 +276,7 @@ if __name__ == "__main__":
 
     if world_rank == 0:
         clean_up_temp_dirs(params.n_train)
+
+    if params.distributed:
+        torch.distributed.barrier()
+    logging.info("DONE ---- rank %d" % world_rank)
