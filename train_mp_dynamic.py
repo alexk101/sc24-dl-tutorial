@@ -181,6 +181,7 @@ if __name__ == "__main__":
     parser.add_argument("--enable_jit", action="store_true", help="enable JIT compilation")
     parser.add_argument("--num_iters", default=None, type=int, help="number of iterations to run")
     parser.add_argument("--budget", default=0.0, type=float, help="compute budget in flops")
+    parser.add_argument("--n_train", default=25, type=int, help="number of training years")
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
@@ -205,17 +206,6 @@ if __name__ == "__main__":
     elif params.amp_mode == "bf16":
         amp_dtype = torch.bfloat16
 
-    # Directory setup
-    baseDir = Path(params.expdir)
-    baseDir.mkdir(exist_ok=True, parents=True)
-    
-    existing = [int(x.name) for x in baseDir.iterdir()]
-    if existing:
-        run_num = str(max(existing)).zfill(4)
-    else:
-        run_num = '000'
-    expDir: Path = baseDir / run_num
-    expDir.mkdir(exist_ok=True, parents=True)
 
     # Hyperparams
     params.embed_dim = args.scale_dim
@@ -229,25 +219,39 @@ if __name__ == "__main__":
     params.data_num_shards = comm.get_size("dp")
     params.data_shard_id = comm.get_rank("dp")
 
-    hparams = {
-        'embed': args.scale_dim,
-        'layers': args.scale_depth,
-        'heads': args.scale_heads,
-        'train_years': args.n_train,
-        'dtype': str(amp_dtype),
-        'compute_budget': args.budget
-    }
-    args.tboard_writer.add_hparams(hparams)
-
     if world_rank == 0:
+        # Directory setup
+        baseDir = Path(scratch) / 'scaling_logs'
+        baseDir.mkdir(exist_ok=True, parents=True)
+
+        existing = [int(x.name) for x in baseDir.iterdir()]
+        if existing:
+            run_num = str(max(existing)).zfill(4)
+        else:
+            run_num = '000'
+        expDir: Path = baseDir / run_num
+        expDir.mkdir(exist_ok=True, parents=True)
+
         # Setup data
         data_subset(params.n_train)
+        params.train_data_path = str(temp_train/str(params.n_train))
+        params.valid_data_path = str(temp_val/str(params.n_train))
         
         logging_utils.log_to_file(
             logger_name=None, log_filename=os.path.join(expDir, "out.log")
         )
         params.log()
         args.tboard_writer = SummaryWriter(log_dir=os.path.join(str(expDir), "logs/"))
+        
+        hparams = {
+            'embed': args.scale_dim,
+            'layers': args.scale_depth,
+            'heads': args.scale_heads,
+            'train_years': args.n_train,
+            'dtype': str(amp_dtype),
+            'compute_budget': args.budget
+        }
+        args.tboard_writer.add_hparams(hparams)
 
     train(params, args, local_rank, world_rank, world_size)
 
