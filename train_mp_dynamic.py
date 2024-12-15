@@ -46,10 +46,12 @@ def data_subset(n_train: int=25):
     (temp_val/str(n_train)).mkdir(exist_ok=True, parents=True)
 
     for x in train_subset:
-        os.symlink(x, temp_train/str(n_train)/x.name)
+        if not (temp_train/str(n_train)/x.name).exists():
+            os.symlink(x, temp_train/str(n_train)/x.name)
     
     for x in valid_subset:
-        os.symlink(x, temp_val/str(n_train)/x.name)
+        if not (temp_val/str(n_train)/x.name).exists():
+            os.symlink(x, temp_val/str(n_train)/x.name)
 
 
 def clean_up_temp_dirs(n_train: int):
