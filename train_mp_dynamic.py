@@ -197,6 +197,7 @@ if __name__ == "__main__":
     parser.add_argument("--context_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
     parser.add_argument("--parallel_order", default="tp-cp-dp", type=str, help="Order of ranks for parallelism")
     parser.add_argument("--noddp", action="store_true", help="disable DDP communication")
+    parser.add_argument("--bucket_cap_mb", default=25, type=int, help="max message bucket size in mb")
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
