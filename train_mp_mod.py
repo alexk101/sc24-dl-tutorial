@@ -34,68 +34,40 @@ scratch = os.getenv("SCRATCH")
 temp_train = Path(f"{scratch}/temp_train")
 temp_val = Path(f"{scratch}/temp_val")
 
-def data_subset(n_valid: int=1):
+def data_subset(n_train: int=1):
     target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
     all_data = list((target/'train').iterdir())
     all_data += list((target/'valid').iterdir())
     sorted(all_data)
-    train_subset = all_data[:n_valid]
-    valid_subset = all_data[n_valid:]
+    train_subset = all_data[:n_train]
+    valid_subset = all_data[n_train:]
 
-    (temp_train/str(n_valid)).mkdir(exist_ok=True, parents=True)
-    (temp_val/str(n_valid)).mkdir(exist_ok=True, parents=True)
+    (temp_train/str(n_train)).mkdir(exist_ok=True, parents=True)
+    (temp_val/str(n_train)).mkdir(exist_ok=True, parents=True)
 
     for x in train_subset:
-        os.symlink(x, temp_train/str(n_valid)/x.name)
+        os.symlink(x, temp_train/str(n_train)/x.name)
     
     for x in valid_subset:
-        os.symlink(x, temp_val/str(n_valid)/x.name)
+        os.symlink(x, temp_val/str(n_train)/x.name)
 
 
-def clean_up_temp_dirs(n_valid: int):
-    for x in (temp_train/str(n_valid)).iterdir():
+def clean_up_temp_dirs(n_train: int):
+    for x in (temp_train/str(n_train)).iterdir():
         os.unlink(x)
 
-    for x in (temp_val/str(n_valid)).iterdir():
+    for x in (temp_val/str(n_train)).iterdir():
         os.unlink(x)
+    os.unlink((temp_val/str(n_train)))
+    os.unlink((temp_train/str(n_train)))
 
 
-def log_scaling_metrics(model, val_rmse, args):
-    """Log metrics relevant to model scaling analysis"""
-    if not hasattr(args, "tboard_writer"):
-        return
-        
-    # Get parameter count
-    param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    # Log efficiency metrics
-    compute_efficiency = -val_rmse / param_count  # Higher is better
-    memory_usage = torch.cuda.max_memory_allocated() / (1024**3)  # GB
-    
-    args.tboard_writer.add_scalar('Scaling/ComputeEfficiency', compute_efficiency, param_count)
-    args.tboard_writer.add_scalar('Scaling/MemoryUsage', memory_usage, param_count)
 
-def log_embedding_metrics(embed_dim, val_loss, val_rmse, args):
-    """Log metrics specific to embedding dimension scaling"""
-    if not hasattr(args, "tboard_writer"):
-        return
-        
-    # Memory metrics
-    mem_allocated = torch.cuda.max_memory_allocated() / (1024**3)  # GB
-    mem_per_dim = mem_allocated / embed_dim
-    
-    # Performance metrics
-    forward_time = args.forward_time_avg if hasattr(args, 'forward_time_avg') else 0
-    
-    # Log metrics vs embedding dimension
-    args.tboard_writer.add_scalar('Embedding/ValidationLoss', val_loss, embed_dim)
-    args.tboard_writer.add_scalar('Embedding/ValidationRMSE', val_rmse, embed_dim)
-    args.tboard_writer.add_scalar('Embedding/MemoryUsage', mem_allocated, embed_dim)
-    args.tboard_writer.add_scalar('Embedding/MemoryPerDim', mem_per_dim, embed_dim)
-    args.tboard_writer.add_scalar('Embedding/ForwardLatency', forward_time, embed_dim)
-    
-    # Log efficiency metric (RMSE reduction per memory)
-    memory_efficiency = -val_rmse / mem_allocated
-    args.tboard_writer.add_scalar('Embedding/MemoryEfficiency', memory_efficiency, embed_dim)
+def adjust_training_steps_for_budget(total_flops, param_count, batch_size, sequence_length):
+    """Adjust the number of training steps to match a specific compute budget"""
+    tokens_per_step = batch_size * sequence_length
+    max_steps = total_flops // (6 * param_count * tokens_per_step)
+    return int(max_steps)
 
 
 def train(params, args, local_rank, world_rank, world_size):
@@ -112,10 +84,10 @@ def train(params, args, local_rank, world_rank, world_size):
     logging.info("rank %d, begin data loader init" % world_rank)
 
     train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(
-        params, str(temp_train/str(params.n_valid)), params.distributed, train=True
+        params, str(temp_train/str(params.n_train)), params.distributed, train=True
     )
     val_data_loader, valid_dataset = get_data_loader_distributed(
-        params, str(temp_val/str(params.n_valid)), params.distributed, train=False
+        params, str(temp_val/str(params.n_train)), params.distributed, train=False
     )
     logging.info("rank %d, data loader initialized" % (world_rank))
 
@@ -204,10 +176,20 @@ def train(params, args, local_rank, world_rank, world_size):
             )
             # Log model params one time
             param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-            args.tboard_writer.add_scalar('Scaling/Parameters', param_count, 0)
+            args.tboard_writer.add_hparams({'model_size': param_count})
     
+    if params.budget:
+        # Calculate sequence length
+        seq_len = (360 // params.patch_size) * (720 // params.patch_size)
+        param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
+        # Number of iterations to run based on desired flops
+        tokens_per_step = params.global_batch_size * seq_len
+        max_steps = int(params.budget // (6 * param_count * tokens_per_step))
+        params.num_iters = max_steps // (params.global_batch_size * seq_len)
+        
     params.num_epochs = params.num_iters // len(train_data_loader)
+
     iters = 0
     t1 = time.time()
     # Training loop
@@ -255,6 +237,7 @@ def train(params, args, local_rank, world_rank, world_size):
                     1024.0 * 1024.0 * 1024.0
                 )
                 logging.info(f" Memory usage after forward pass: {all_mem_gb} GB.")
+                args.tboard_writer.add_hparams({'mem': all_mem_gb})
 
             if params.amp_dtype == torch.float16:
                 scaler.scale(loss).backward()
@@ -304,11 +287,6 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_scalar("Avg samples per sec", samples_per_sec, iters)
             fig = generate_images([inp, tar, gen])
             args.tboard_writer.add_figure("Visualization, t2m", fig, iters, close=True)
-        
-            # FLOP
-            # flops = FlopCountAnalysis(model, next(iter(train_data_loader))[0].to(device))
-            # args.tboard_writer.add_scalar('Scaling/FLOPs', flops.total(), 0)
-            # adjust_iterations_for_budget(flops, params)
 
 
         val_start = time.time()
@@ -348,8 +326,6 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
             )
-            log_scaling_metrics(model, val_rmse.cpu().numpy()[0], args)
-            log_embedding_metrics(params.embed_dim, val_loss, val_rmse.cpu().numpy()[0], args)
             args.tboard_writer.flush()
             
     torch.cuda.synchronize()
@@ -386,10 +362,22 @@ if __name__ == "__main__":
         help="Scaling factor for embedding dimension"
     )
     parser.add_argument(
-        "--n_valid",
+        "--n_train",
         type=int,
         default=1.0,
-        help="Number of years to use for validation"
+        help="Number of years to use for training"
+    )
+    parser.add_argument(
+        "--exp_name",
+        type=str,
+        default='default',
+        help="Experiment name"
+    )
+    parser.add_argument(
+        "--budget",
+        default="0.0",
+        type=float,
+        help="Compute budget in FLOPS",
     )
     #########################
     parser.add_argument(
@@ -479,9 +467,8 @@ if __name__ == "__main__":
     params.embed_dim = args.scale_dim
     params.depth = args.scale_depth
     params.num_heads = args.scale_heads
-    params.n_valid = args.n_valid
+    params.n_train = args.n_train
     ########
-    param_str = f"L{args.scale_depth}_H{args.scale_heads}"
 
     # Update config with modified args
     # set up amp
@@ -492,6 +479,7 @@ if __name__ == "__main__":
         amp_dtype = torch.float16
     elif params.amp_mode == "bf16":
         amp_dtype = torch.bfloat16
+
     params.update(
         {
             "amp_enabled": amp_dtype is not torch.float32,
@@ -546,13 +534,11 @@ if __name__ == "__main__":
     params.data_shard_id = comm.get_rank("dp")
 
     # Set up directory
-    baseDir = params.expdir
-    # expDir = os.path.join(
-    #     baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_{param_str}" +"/"
-    # )
-    expDir = os.path.join(
-        baseDir, args.config + "/%dMP/" % (comm.get_size("tp-cp")) + str(run_num) + f"_emb{args.scale_dim}_val{str(args.n_valid)}" +"/"
-    )
+    baseDir = Path(params.expdir)
+    existing = [int(x.name) for x in baseDir.iterdir()]
+    run_num = str(max(existing)).zfill()
+    expDir = baseDir / run_num
+
     if world_rank == 0:
         if not os.path.isdir(expDir):
             os.makedirs(expDir)
@@ -562,15 +548,31 @@ if __name__ == "__main__":
         params.log()
         args.tboard_writer = SummaryWriter(log_dir=os.path.join(expDir, "logs/"))
 
+        params.embed_dim = args.scale_dim
+        params.depth = args.scale_depth
+        params.num_heads = args.scale_heads
+        params.n_train = args.n_train
+        params.budget = args.budget
+
+        hparams = {
+            'embed': args.scale_dim,
+            'layers': args.scale_depth,
+            'heads': args.scale_heads,
+            'train_years': args.n_train,
+            'dtype': str(amp_dtype),
+            'compute_budget': args.budget
+        }
+        args.tboard_writer.add_hparams(hparams)
+
     params.experiment_dir = os.path.abspath(expDir)
 
     if world_rank == 0:
-        data_subset(params.n_valid)
+        data_subset(params.n_train)
 
     train(params, args, local_rank, world_rank, world_size)
 
     if world_rank == 0:
-        clean_up_temp_dirs(params.n_valid)
+        clean_up_temp_dirs(params.n_train)
 
     if params.distributed:
         torch.distributed.barrier()

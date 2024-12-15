@@ -6,6 +6,12 @@ app = marimo.App(width="medium")
 
 @app.cell
 def __():
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def __():
     import os
     import glob
     import numpy as np
@@ -31,7 +37,7 @@ def __():
 
 
 @app.cell
-def __(EventAccumulator, Path, defaultdict, glob, pl, plt, sns):
+def __(EventAccumulator, Path, defaultdict, glob, pl):
     def get_config_details(run_path):
         """Parse config string like 'dim128_depth6_heads4' into dict"""
 
@@ -40,16 +46,22 @@ def __(EventAccumulator, Path, defaultdict, glob, pl, plt, sns):
             emb = 384
             layers = int(run_name.split('_')[1][1:])
             heads = int(run_name.split('_')[2][1:])
+            train_years = 27
         else:
             emb = int(run_name.split('_')[1][3:])
             layers = 12
             heads = 8
+            train_years = 27
+            if 'val' in run_name:
+                train_years = int(run_name.split('_')[2][3:])
 
         return {
             'embed_dim': emb,
             'depth': layers,
-            'num_heads': heads
+            'num_heads': heads,
+            'train_years': train_years
         }
+
 
     def count_parameters(config):
         """Calculate total trainable parameters for a given config"""
@@ -66,6 +78,20 @@ def __(EventAccumulator, Path, defaultdict, glob, pl, plt, sns):
         total_params = depth * block_params
         return total_params
 
+
+    def add_trace(ea: EventAccumulator, ts: dict, name: str, key: str, run_num: str):
+        print(ea.Tags())
+        if key not in ea.Tags()['scalars']:
+            print(f'Experiment {run_num} has no data for {key}. skipping')
+            return
+        ts_data = [x.value for x in ea.Scalars(key)]
+
+        ts['run'] += [run_num]*len(ts_data)
+        ts['series'] += [name] * len(ts_data)
+        ts['value'] += ts_data
+        ts['epoch'] += range(1, 1+len(ts_data))
+
+
     def extract_metrics(logdir):
         """Extract metrics from tensorboard logs"""
         results = []
@@ -77,73 +103,26 @@ def __(EventAccumulator, Path, defaultdict, glob, pl, plt, sns):
             ea.Reload()
 
             run_num = run_dir.split('/')[-2]
-
-            # Get final metrics
-            final_val_loss = ea.Scalars('Loss/valid')[-1].value
-            final_rmse = ea.Scalars('RMSE(u10m)/valid')[-1].value
-            if 'Avg samples per sec' not in ea.scalars.Keys():
-                throughput = 0
-            else:
-                throughput = ea.Scalars('Avg samples per sec')[-1].value
-
             # Get config details
             config_details = get_config_details(run_path)
             param_count = count_parameters(config_details)
 
-            rmse = [x.value for x in ea.Scalars('RMSE(u10m)/valid')]
-            val_loss = [x.value for x in ea.Scalars('Loss/valid')]
-            train_loss = [x.value for x in ea.Scalars('Loss/train')]
-            
-
-            ts['run'] += [run_num]*len(rmse)
-            ts['series'] += ['rmse'] * len(rmse)
-            ts['val'] += rmse
-            ts['epoch'] += range(1, 1+len(rmse))
-            
-
-            ts['run'] += [run_num]*len(train_loss)
-            ts['series'] += ['train_loss']*len(train_loss)
-            ts['val'] += train_loss
-            ts['epoch'] += range(1, 1+len(train_loss))
-
-            ts['run'] += [run_num]*len(val_loss)
-            ts['series'] += ['val_loss']*len(val_loss)
-            ts['val'] += val_loss
-            ts['epoch'] += range(1, 1+len(val_loss))
+            add_trace(ea, ts, 'rmse', 'RMSE(u10m)/valid', run_num)
+            add_trace(ea, ts, 'val_loss', 'Loss/valid', run_num)
+            add_trace(ea, ts, 'train_loss', 'Loss/train', run_num)
+            add_trace(ea, ts, 'samples/sec', 'Avg samples per sec', run_num)
 
             results.append({
                 'run': run_num,
                 'parameters': param_count,
-                'val_loss': final_val_loss,
-                'final_rmse': final_rmse,
-                'throughput': throughput,
                 'embed_dim': config_details['embed_dim'],
                 'depth': config_details['depth'],
-                'num_heads': config_details['num_heads']
+                'num_heads': config_details['num_heads'],
+                'train_years': config_details['train_years']
             })
 
         return pl.DataFrame(results), pl.DataFrame(ts)
-
-    def plot_analysis(df):
-        embedding = df.filter(pl.col('run').str.contains('emb'))
-
-        fig, axes = plt.subplots(1,3, figsize=(15,5))
-        sns.barplot(embedding, x='embed_dim', y='throughput', ax=axes[0])
-        axes[0].set_title('embed_dim vs throughput')
-        sns.barplot(embedding, x='embed_dim', y='val_loss', ax=axes[1])
-        axes[1].set_title('embed_dim vs val_loss')
-        sns.barplot(embedding, x='embed_dim', y='final_rmse', ax=axes[2])
-        axes[2].set_title('embed_dim vs rmse')
-
-        params = df.filter(~pl.col('run').str.contains('emb'))
-        sns.catplot(params, x='num_heads', y='final_rmse', col='depth', kind='bar')
-        plt.show()
-    return (
-        count_parameters,
-        extract_metrics,
-        get_config_details,
-        plot_analysis,
-    )
+    return add_trace, count_parameters, extract_metrics, get_config_details
 
 
 @app.cell
@@ -162,17 +141,6 @@ def __(ts_df):
 
 
 @app.cell
-def __():
-    return
-
-
-@app.cell
-def __(plot_analysis, results_df):
-    plot_analysis(results_df)
-    return
-
-
-@app.cell
 def __(results_df, ts_df):
     all_data = ts_df.join(results_df, on='run')
     all_data
@@ -180,16 +148,90 @@ def __(results_df, ts_df):
 
 
 @app.cell
-def __(all_data, pl, sns):
-    all_embedding = all_data.filter(pl.col('run').str.contains('emb'))
-    all_embedding = all_embedding.filter(~pl.col('embed_dim').is_in([384, 768, 576]))
-    sns.relplot(all_embedding, x='epoch', y='val', col='series', hue='embed_dim', kind='line')
-    return (all_embedding,)
+def __():
+    acc_vars = ['rmse', 'val_loss', 'train_loss']
+    perf_vars = ['samples/sec']
+    return acc_vars, perf_vars
 
 
 @app.cell
-def __(all_embedding, sns):
-    sns.relplot(all_embedding, x='epoch', y='val', col='series', hue='embed_dim', kind='line')
+def __(all_data, pl):
+    layer_exps = all_data.filter(pl.col('run').str.contains('L'))
+    print(layer_exps['run'].unique().to_list())
+    return (layer_exps,)
+
+
+@app.cell
+def __(acc_vars, layer_exps, pl, sns):
+    layer_acc_dat = layer_exps.filter(pl.col('series').is_in(acc_vars))
+    sns.relplot(layer_acc_dat, x='epoch', y='value', col='series', hue='num_heads', kind='line')
+    return (layer_acc_dat,)
+
+
+@app.cell
+def __(layer_exps, perf_vars, pl, sns):
+    layer_perf_dat = layer_exps.filter(pl.col('series').is_in(perf_vars))
+    sns.relplot(layer_perf_dat, x='epoch', y='value', col='depth', hue='num_heads', kind='line')
+    return (layer_perf_dat,)
+
+
+@app.cell
+def __(layer_acc_dat, sns):
+    sns.relplot(layer_acc_dat, x='epoch', y='value', col='series', hue='depth', kind='line')
+    return
+
+
+@app.cell
+def __(acc_vars, all_data, pl, sns):
+    all_embedding = all_data.filter(pl.col('run').str.contains('emb'))
+    all_embedding = all_data.filter(~pl.col('run').str.contains('val'))
+    all_embedding = all_embedding.filter(~pl.col('embed_dim').is_in([384, 768, 576]))
+    emb_acc_dat = all_embedding.filter(pl.col('series').is_in(acc_vars))
+    sns.relplot(emb_acc_dat, x='epoch', y='value', col='series', hue='embed_dim', kind='line')
+    return all_embedding, emb_acc_dat
+
+
+@app.cell
+def __(mo):
+    mo.md(
+        r"""
+        ## Accuracy vs Embedding Dimension
+
+        The embedding dimension in a ViT model determines how well it can learn complex relationships. Patches from the spatial domain are linearly projected into the embedding dimension and are directly proportional to the weights. In this experiment, we hold constant the number of layers and heads, 8 and 12 respectively, while progressively increasing the embedding dimension by mutiples of 2, starting at 128. This shows that accuracy of the model increases as a function of embedding dimension.
+        """
+    )
+    return
+
+
+@app.cell
+def __(acc_vars, all_data, pl, sns):
+    dataset_scaling = all_data.filter(pl.col('run').str.contains('val'))
+    dataset_acc_dat = dataset_scaling.filter(pl.col('series').is_in(acc_vars))
+    sns.relplot(dataset_acc_dat, x='epoch', y='value', col='series', hue='train_years', kind='line')
+    return dataset_acc_dat, dataset_scaling
+
+
+@app.cell
+def __(mo):
+    mo.md(
+        r"""
+        ### Accuracy vs Dataset Size
+
+        This experiment was run by varying the amount of data used for training vs validation. Our data consists of a downsampled version of the ERA5 dataset, which consists of multiple 4D variables (ie ones which vary across space and time). The values have a temporal resolution of 6 hours and a spatial resolution of 360 by 720 sampled on a Gaussian Grid. This is across 20 atmospheric variables. Data is further organized by year, with our set consisting of years 1990-2017. 
+
+        For this test, we incrementally reduce the number of years used in training while simultaneously increasing the number used for validation. We begin with 1 year for validation and progressively increase this by powers of 2, with samples taken the tail end of the training dataset being moved to the validation. 
+
+        | Training Number      | Validation  | Training    |
+        | -------------------- | ----------- | ----------- |
+        | 1                    | 1990 - 2016 | 2016 - 2017 |
+        | 2                    | 1990 - 2015 | 2015 - 2017 |
+        | 4                    | 1990 - 2013 | 2013 - 2017 |
+        | 8                    | 1990 - 2009 | 2009 - 2017 |
+        | 16                   | 1990 - 2001 | 2001 - 2017 |
+
+        The results of this experiment show that accuracy increases as a function of the training number. This is expected, as more data should help the model learn the atmospheric conditions more effectively.
+        """
+    )
     return
 
 
