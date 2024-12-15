@@ -189,6 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_iters", default=None, type=int, help="number of iterations to run")
     parser.add_argument("--budget", default=0.0, type=float, help="compute budget in flops")
     parser.add_argument("--n_train", default=25, type=int, help="number of training years")
+    parser.add_argument("--local_batch_size", default=None, type=int, help="local batchsize (manually override global_batch_size config setting)",)
     # model parallelism arguments
     parser.add_argument("--tensor_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
     parser.add_argument("--context_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
