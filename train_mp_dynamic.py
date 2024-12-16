@@ -236,7 +236,8 @@ def train(params, args, local_rank, world_rank, world_size):
     model.train()
     for epoch in range((params.num_iters // len(train_data_loader)) + 1):
         torch.cuda.synchronize()
-        train_sampler.set_epoch(epoch)
+        if params.distributed and (train_sampler is not None):
+            train_sampler.set_epoch(epoch)
         start = time.time()
         tr_loss = []
         step_count = 0
