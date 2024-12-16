@@ -139,6 +139,7 @@ def train(params, args, local_rank, world_rank, world_size):
         tokens_per_step = params.global_batch_size * seq_len
         max_steps = int(params.budget // (6 * param_count * tokens_per_step))
         params.num_iters = max_steps // (params.global_batch_size * seq_len)
+        logging.info(f'Calculated {params.num_iters} iterations for compute budget {params.budget}')
 
     iters = 0
     startEpoch = 0
@@ -211,6 +212,8 @@ def train(params, args, local_rank, world_rank, world_size):
         step_count = 0
 
         for i, data in enumerate(train_data_loader, 0):
+            if iters >= params.num_iters:
+                break  
             if world_rank == 0:
                 if epoch == 3 and i == 0:
                     torch.cuda.profiler.start()
@@ -275,6 +278,7 @@ def train(params, args, local_rank, world_rank, world_size):
         if world_rank == 0:
             iters_per_sec = step_count / (end - start)
             samples_per_sec = params["global_batch_size"] * iters_per_sec
+            logging.info(f'Epoch {epoch} | {iters}/{params.num_iters}')
             logging.info(
                 "Time taken for epoch %i is %f sec, avg %f samples/sec",
                 epoch + 1,
@@ -330,6 +334,8 @@ def train(params, args, local_rank, world_rank, world_size):
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
             )
             args.tboard_writer.flush()
+        if iters >= params.num_iters:
+            break
             
     torch.cuda.synchronize()
     t2 = time.time()
