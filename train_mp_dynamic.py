@@ -3,6 +3,8 @@ import os
 import time
 import numpy as np
 import argparse
+
+import torch.distributed
 import pynvml
 
 import torch
@@ -203,7 +205,9 @@ def train(params, args, local_rank, world_rank, world_size):
         max_steps = int(params.budget // (6 * param_count * tokens_per_step))
         params.num_iters = max_steps // (params.global_batch_size * seq_len)
 
-    params.num_iters = comm.broadcast_value(params.num_iters, src=0)
+    num_iters_tensor = torch.tensor(params.num_iters, device=device)
+    torch.distributed.broadcast_value(num_iters_tensor, src=0)
+    params.num_iters = num_iters_tensor.item()
 
     if params.enable_fused:
         optimizer = optim.Adam(model.parameters(), lr=params.lr, fused=True, betas=(0.9, 0.95))
