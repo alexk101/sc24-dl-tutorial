@@ -114,47 +114,6 @@ def log_iter(args, step_count, start, end, epoch, iters, tr_loss, optimizer, inp
     args.tboard_writer.add_figure("Visualization, t2m", fig, iters, close=True)
 
 
-def validation(model, device, val_data_loader, loss_func, iters):
-    val_start = time.time()
-    val_loss = torch.zeros(1, device=device)
-    val_rmse = torch.zeros(
-        (params.n_out_channels), dtype=torch.float32, device=device
-    )
-    valid_steps = 0
-    model.eval()
-
-    # Validation
-    with torch.inference_mode():
-        with torch.no_grad():
-            for i, data in enumerate(val_data_loader, 0):
-                with autocast('cuda', enabled=params.amp_enabled, dtype=params.amp_dtype):
-                    inp, tar = map(lambda x: x.to(device), data)
-                    gen = model(inp)
-                    val_loss += loss_func(gen, tar)
-                    val_rmse += weighted_rmse(gen, tar)
-                valid_steps += 1
-
-            if params.distributed:
-                torch.distributed.all_reduce(
-                    val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
-                )
-                torch.distributed.all_reduce(
-                    val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
-                )
-
-    val_rmse /= valid_steps  # Avg validation rmse
-    val_loss /= valid_steps
-    val_end = time.time()
-    if world_rank == 0:
-        logging.info("  Avg val loss={}".format(val_loss.item()))
-        logging.info("  Total validation time: {} sec".format(val_end - val_start))
-        args.tboard_writer.add_scalar("Loss/valid", val_loss, iters)
-        args.tboard_writer.add_scalar(
-            "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
-        )
-        args.tboard_writer.flush()
-
-
 def train(params, args, local_rank, world_rank, world_size):
     # set device and benchmark mode
     torch.backends.cudnn.benchmark = True
@@ -285,7 +244,45 @@ def train(params, args, local_rank, world_rank, world_size):
             logging.info(f"Rank {world_rank}, Step {global_step}: Memory Used: {mem_info.used / (1024 ** 3):.2f} GB, Free: {mem_info.free / (1024 ** 3):.2f} GB")
             log_iter(args, step_count, start, end, epoch, global_step, tr_loss, optimizer, inp, tar, gen)
         
-        validation(model, device, val_data_loader, loss_func, global_step)
+        # Validations
+        val_start = time.time()
+        val_loss = torch.zeros(1, device=device)
+        val_rmse = torch.zeros(
+            (params.n_out_channels), dtype=torch.float32, device=device
+        )
+        valid_steps = 0
+        model.eval()
+
+        # Validation
+        with torch.inference_mode():
+            with torch.no_grad():
+                for i, data in enumerate(val_data_loader, 0):
+                    with autocast('cuda', enabled=params.amp_enabled, dtype=params.amp_dtype):
+                        inp, tar = map(lambda x: x.to(device), data)
+                        gen = model(inp)
+                        val_loss += loss_func(gen, tar)
+                        val_rmse += weighted_rmse(gen, tar)
+                    valid_steps += 1
+
+                if params.distributed:
+                    torch.distributed.all_reduce(
+                        val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+                    )
+                    torch.distributed.all_reduce(
+                        val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
+                    )
+        val_end = time.time()
+        val_rmse /= valid_steps  # Avg validation rmse
+        val_loss /= valid_steps
+        val_end = time.time()
+        if world_rank == 0:
+            logging.info("  Avg val loss={}".format(val_loss.item()))
+            logging.info("  Total validation time: {} sec".format(val_end - val_start))
+            args.tboard_writer.add_scalar("Loss/valid", val_loss, global_step)
+            args.tboard_writer.add_scalar(
+                "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], global_step
+            )
+            args.tboard_writer.flush()
     torch.cuda.synchronize()
     # Shutdown pynvml
     pynvml.nvmlShutdown()
