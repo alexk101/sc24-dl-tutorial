@@ -37,6 +37,80 @@ def __():
 
 
 @app.cell
+def __(Path, defaultdict, pl, plt, sns):
+    from networks import vit
+    from utils.YParams import YParams
+    import torch
+
+    def get_model_params(yaml_path, config, scale_dim, scale_depth, scale_heads):
+        params = YParams(yaml_path, config)
+        params.embed_dim = scale_dim
+        params.depth = scale_depth
+        params.num_heads = scale_heads
+        model = vit.ViT(params)
+        param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        return param_count
+
+    def calc_iters(budget, scale_dim, scale_depth, scale_heads):
+        param_count = get_model_params(Path('./config/ViT.yaml'), 'mp', scale_dim, scale_depth, scale_heads)
+        data_shape = (360, 720)
+        patch_size = 8
+        seq_len = (data_shape[0] // patch_size) * (data_shape[1] // patch_size)
+        global_batch_size = 64
+        tokens_per_step = global_batch_size * seq_len
+        max_steps = int(budget // (6 * param_count * tokens_per_step))
+        num_iters = max_steps // tokens_per_step
+        return num_iters, param_count
+
+    budgets = [1e19, 1e20, 1e21, 1e22, 1e23]
+    budget_iter = defaultdict(list)
+    for layer in [12,16,20,24]:
+        for budget in budgets:
+            iters, p_count = calc_iters(budget, 384, layer, 8)
+            budget_iter['layer'].append(layer)
+            budget_iter['params'].append(p_count)
+            budget_iter['iters'].append(iters)
+            budget_iter['flops'].append(budget)
+            budget_iter['embed'].append(384)
+            budget_iter['exp'].append('layers')
+
+    for embed in [128, 256, 512, 1024]:
+        for budget in budgets:
+            iters, p_count = calc_iters(budget, embed, 12, 8)
+            budget_iter['layer'].append(12)
+            budget_iter['params'].append(p_count)
+            budget_iter['iters'].append(iters)
+            budget_iter['flops'].append(budget)
+            budget_iter['embed'].append(embed)
+            budget_iter['exp'].append('embed')
+
+    iter_data = pl.DataFrame(budget_iter)
+    fig, ax = plt.subplots(1, 2, figsize=(20,8))
+    sns.lineplot(iter_data.filter(pl.col('exp')=='layers'), x='flops', y='iters', hue='layer', ax=ax[0])
+    sns.lineplot(iter_data.filter(pl.col('exp')=='embed'), x='flops', y='iters', hue='embed', ax=ax[1])
+    ax[0].set_xscale('log')
+    ax[1].set_xscale('log')
+    fig
+    return (
+        YParams,
+        ax,
+        budget,
+        budget_iter,
+        budgets,
+        calc_iters,
+        embed,
+        fig,
+        get_model_params,
+        iter_data,
+        iters,
+        layer,
+        p_count,
+        torch,
+        vit,
+    )
+
+
+@app.cell
 def __(EventAccumulator, Path, defaultdict, glob, pl):
     def get_config_details(run_path):
         """Parse config string like 'dim128_depth6_heads4' into dict"""
@@ -80,7 +154,6 @@ def __(EventAccumulator, Path, defaultdict, glob, pl):
 
 
     def add_trace(ea: EventAccumulator, ts: dict, name: str, key: str, run_num: str):
-        print(ea.Tags())
         if key not in ea.Tags()['scalars']:
             print(f'Experiment {run_num} has no data for {key}. skipping')
             return

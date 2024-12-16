@@ -86,6 +86,21 @@ def train(params, args, local_rank, world_rank, world_size):
     )
     logging.info("rank %d, data loader initialized" % (world_rank))
 
+    # Sanity check: Log GPU details
+    gpu_name = torch.cuda.get_device_name(device)
+    total_memory = pynvml.nvmlDeviceGetMemoryInfo(nvml_handle).total / (1024 ** 3)
+    logging.info(f"Rank {world_rank}: Using GPU {local_rank} - {gpu_name}, Total GPU memory: {total_memory:.2f} GB")
+
+    # Log node details
+    logging.info(f"Rank {world_rank}/{world_size} running on node: {os.uname().nodename}")
+
+    # Distributed all-reduce test
+    test_tensor = torch.tensor(world_rank, device=device)
+    torch.distributed.all_reduce(test_tensor, op=torch.distributed.ReduceOp.SUM)
+    if world_rank == 0:
+        expected_sum = (world_size * (world_size - 1)) // 2
+        logging.info(f"Sanity check: Sum of ranks across nodes: {test_tensor.item()} (Expected: {expected_sum})")
+
     # create model
     model = vit.ViT(params).to(device)
 
@@ -135,7 +150,7 @@ def train(params, args, local_rank, world_rank, world_size):
         max_steps = int(params.budget // (6 * param_count * tokens_per_step))
         logging.info(f'param_count: {param_count}')
         logging.info(f'max_steps {params.budget} / {(6 * param_count * tokens_per_step)}')
-        params.num_iters = max_steps // (params.global_batch_size * seq_len)
+        params.num_iters = max_steps // tokens_per_step
         logging.info(f'Calculated {params.num_iters} iterations for compute budget {params.budget}')
         logging.info(f'train_data_loader: {len(train_data_loader)}')
 
