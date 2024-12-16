@@ -275,16 +275,18 @@ def train(params, args, local_rank, world_rank, world_size):
             step_count += 1
             global_step += 1
 
+        torch.cuda.synchronize()
         end = time.time()
         # Log training progress
-        if world_rank == 0 and global_step % 100 == 0:
+        if world_rank == 0 :
             logging.info(f"Step {global_step}/{params.num_iters}, Loss: {loss.item():.4f}")
             # Log memory usage
             mem_info = pynvml.nvmlDeviceGetMemoryInfo(nvml_handle)
             logging.info(f"Rank {world_rank}, Step {global_step}: Memory Used: {mem_info.used / (1024 ** 3):.2f} GB, Free: {mem_info.free / (1024 ** 3):.2f} GB")
             log_iter(args, step_count, start, end, epoch, global_step, tr_loss, optimizer, inp, tar, gen)
-        torch.cuda.synchronize()
+        
         validation(model, device, val_data_loader, loss_func, global_step)
+    torch.cuda.synchronize()
     # Shutdown pynvml
     pynvml.nvmlShutdown()
 
