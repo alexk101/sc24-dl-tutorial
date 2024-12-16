@@ -255,6 +255,18 @@ def __(layer_acc_dat, sns):
 
 
 @app.cell
+def __(mo):
+    mo.md(
+        r"""
+        ## Accuracy vs Depth
+
+        In this experiment, we measure the accuracy of the model with different numbers of transformer layers.
+        """
+    )
+    return
+
+
+@app.cell
 def __(acc_vars, all_data, pl, sns):
     all_embedding = all_data.filter(pl.col('run').str.contains('emb'))
     all_embedding = all_data.filter(~pl.col('run').str.contains('val'))

@@ -400,13 +400,15 @@ if __name__ == "__main__":
 
     # Update config with modified args
     # set up amp
-    if args.amp_mode != "none":
-        params.update({"amp_mode": args.amp_mode})
-    amp_dtype = torch.float32
+
+    params.update({"amp_mode": args.amp_mode})
+        
     if params.amp_mode == "fp16":
         amp_dtype = torch.float16
     elif params.amp_mode == "bf16":
         amp_dtype = torch.bfloat16
+    else:
+        amp_dtype = torch.float32
 
     params.update(
         {
