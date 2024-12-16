@@ -237,7 +237,6 @@ def train(params, args, local_rank, world_rank, world_size):
                     1024.0 * 1024.0 * 1024.0
                 )
                 logging.info(f" Memory usage after forward pass: {all_mem_gb} GB.")
-                args.tboard_writer.add_hparams({'mem': all_mem_gb})
 
             if params.amp_dtype == torch.float16:
                 scaler.scale(loss).backward()

@@ -13,6 +13,7 @@ import torch.multiprocessing
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import ReduceOp
+from utils.plots import generate_images
 
 import logging
 from utils import logging_utils
@@ -62,6 +63,94 @@ def clean_up_temp_dirs(n_train: int):
         os.unlink(x)
     os.unlink((temp_val/str(n_train)))
     os.unlink((temp_train/str(n_train)))
+
+
+def init_logs(model, device, train_data_loader, val_data_loader, loss_func, args):
+    with torch.no_grad():
+        inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
+        gen = model(inp)
+        tr_loss = loss_func(gen, tar)
+        inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
+        gen = model(inp)
+        val_loss = loss_func(gen, tar)
+        val_rmse = weighted_rmse(gen, tar)
+        if params.distributed:
+            torch.distributed.all_reduce(
+                tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+            )
+            torch.distributed.all_reduce(
+                val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+            )
+            torch.distributed.all_reduce(
+                val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
+            )
+        if world_rank == 0:
+            args.tboard_writer.add_scalar("Loss/train", tr_loss.item(), 0)
+            args.tboard_writer.add_scalar("Loss/valid", val_loss.item(), 0)
+            args.tboard_writer.add_scalar(
+                "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
+            )
+
+
+def log_iter(args, step_count, start, end, epoch, iters, tr_loss, optimizer, inp, tar, gen):
+    iters_per_sec = step_count / (end - start)
+    samples_per_sec = params["global_batch_size"] * iters_per_sec
+    logging.info(
+        "Time taken for epoch %i is %f sec, avg %f samples/sec",
+        epoch + 1,
+        end - start,
+        samples_per_sec,
+    )
+    logging.info("  Avg train loss=%f" % np.mean(tr_loss))
+    args.tboard_writer.add_scalar("Loss/train", np.mean(tr_loss), iters)
+    args.tboard_writer.add_scalar(
+        "Learning Rate", optimizer.param_groups[0]["lr"], iters
+    )
+    args.tboard_writer.add_scalar("Avg iters per sec", iters_per_sec, iters)
+    args.tboard_writer.add_scalar("Avg samples per sec", samples_per_sec, iters)
+    fig = generate_images([inp, tar, gen])
+    args.tboard_writer.add_figure("Visualization, t2m", fig, iters, close=True)
+
+
+def validation(model, device, val_data_loader, loss_func, iters):
+    val_start = time.time()
+    val_loss = torch.zeros(1, device=device)
+    val_rmse = torch.zeros(
+        (params.n_out_channels), dtype=torch.float32, device=device
+    )
+    valid_steps = 0
+    model.eval()
+
+    # Validation
+    with torch.inference_mode():
+        with torch.no_grad():
+            for i, data in enumerate(val_data_loader, 0):
+                with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
+                    inp, tar = map(lambda x: x.to(device), data)
+                    gen = model(inp)
+                    val_loss += loss_func(gen, tar)
+                    val_rmse += weighted_rmse(gen, tar)
+                valid_steps += 1
+
+            if params.distributed:
+                torch.distributed.all_reduce(
+                    val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+                )
+                torch.distributed.all_reduce(
+                    val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
+                )
+
+    val_rmse /= valid_steps  # Avg validation rmse
+    val_loss /= valid_steps
+    val_end = time.time()
+    if world_rank == 0:
+        logging.info("  Avg val loss={}".format(val_loss.item()))
+        logging.info("  Total validation time: {} sec".format(val_end - val_start))
+        args.tboard_writer.add_scalar("Loss/valid", val_loss, iters)
+        args.tboard_writer.add_scalar(
+            "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
+        )
+        args.tboard_writer.flush()
 
 
 def train(params, args, local_rank, world_rank, world_size):
@@ -114,6 +203,7 @@ def train(params, args, local_rank, world_rank, world_size):
         max_steps = int(params.budget // (6 * param_count * tokens_per_step))
         params.num_iters = max_steps // (params.global_batch_size * seq_len)
 
+    params.num_iters = comm.broadcast_value(params.num_iters, src=0)
 
     if params.enable_fused:
         optimizer = optim.Adam(model.parameters(), lr=params.lr, fused=True, betas=(0.9, 0.95))
@@ -136,15 +226,26 @@ def train(params, args, local_rank, world_rank, world_size):
 
     if world_rank == 0:
         logging.info(model)
+        logging.info(f"num_iters: {params.num_iters}")
 
+    init_logs(model, device, train_data_loader, val_data_loader, loss_func, args)
     # Track iterations globally across distributed ranks
-    global_step = 0
+    global_step = torch.tensor(0, device=device)
 
     # Training loop with step-based control
     model.train()
-    while global_step < params.num_iters:
+    for epoch in range((params.num_iters // len(train_data_loader)) + 1):
+        torch.cuda.synchronize()
+        train_sampler.set_epoch(epoch)
+        start = time.time()
+        tr_loss = []
+        step_count = 0
+
         for batch_idx, (inp, tar) in enumerate(train_data_loader):
-            if global_step >= params.num_iters:
+            torch.distributed.all_reduce(
+                global_step, op=torch.distributed.ReduceOp.MAX, group=comm.get_group("dp")
+            )
+            if global_step.item() >= params.num_iters:
                 break
 
             inp, tar = inp.to(device), tar.to(device)
@@ -166,18 +267,23 @@ def train(params, args, local_rank, world_rank, world_size):
                 torch.distributed.all_reduce(
                     loss, op=ReduceOp.AVG, group=comm.get_group("dp")
                 )
+            tr_loss.append(loss.item())
             # lr step
             scheduler.step()
 
+            step_count += 1
             global_step += 1
 
-            # Log training progress
-            if world_rank == 0 and global_step % 100 == 0:
-                logging.info(f"Step {global_step}/{params.num_iters}, Loss: {loss.item():.4f}")
-                # Log memory usage
+        end = time.time()
+        # Log training progress
+        if world_rank == 0 and global_step % 100 == 0:
+            logging.info(f"Step {global_step}/{params.num_iters}, Loss: {loss.item():.4f}")
+            # Log memory usage
             mem_info = pynvml.nvmlDeviceGetMemoryInfo(nvml_handle)
             logging.info(f"Rank {world_rank}, Step {global_step}: Memory Used: {mem_info.used / (1024 ** 3):.2f} GB, Free: {mem_info.free / (1024 ** 3):.2f} GB")
-
+            log_iter(args, step_count, start, end, epoch, global_step, tr_loss, optimizer, inp, tar, gen)
+        torch.cuda.synchronize()
+        validation(model, device, val_data_loader, loss_func, global_step)
     # Shutdown pynvml
     pynvml.nvmlShutdown()
 
@@ -201,6 +307,7 @@ if __name__ == "__main__":
     parser.add_argument("--parallel_order", default="tp-cp-dp", type=str, help="Order of ranks for parallelism")
     parser.add_argument("--noddp", action="store_true", help="disable DDP communication")
     parser.add_argument("--bucket_cap_mb", default=25, type=int, help="max message bucket size in mb")
+    parser.add_argument("--num_iters", default=None, type=int, help="number of iters to run")
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
@@ -267,7 +374,7 @@ if __name__ == "__main__":
 
         existing = [int(x.name) for x in baseDir.iterdir()]
         if existing:
-            run_num = str(max(existing)).zfill(4)
+            run_num = str(max(existing)+1).zfill(3)
         else:
             run_num = '000'
         expDir: Path = baseDir / run_num
@@ -281,7 +388,7 @@ if __name__ == "__main__":
         logging_utils.log_to_file(
             logger_name=None, log_filename=os.path.join(expDir, "out.log")
         )
-        # params.log()
+        params.log()
         args.tboard_writer = SummaryWriter(log_dir=os.path.join(str(expDir), "logs/"))
         
         hparams = {
