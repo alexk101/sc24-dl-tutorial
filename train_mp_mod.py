@@ -133,7 +133,8 @@ def train(params, args, local_rank, world_rank, world_size):
         tokens_per_step = params.global_batch_size * seq_len
         logging.info(f'tokens_per_step {tokens_per_step}')
         max_steps = int(params.budget // (6 * param_count * tokens_per_step))
-        logging.info(f'max_steps {max_steps}')
+        logging.info(f'param_count: {param_count}')
+        logging.info(f'max_steps {params.budget} / {(6 * param_count * tokens_per_step)}')
         params.num_iters = max_steps // (params.global_batch_size * seq_len)
         logging.info(f'Calculated {params.num_iters} iterations for compute budget {params.budget}')
 
