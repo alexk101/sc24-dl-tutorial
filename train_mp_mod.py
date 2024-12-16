@@ -61,8 +61,8 @@ def clean_up_temp_dirs(n_train: int):
 
     for x in (temp_val/str(n_train)).iterdir():
         os.unlink(x)
-    os.unlink((temp_val/str(n_train)))
-    os.unlink((temp_train/str(n_train)))
+    (temp_val/str(n_train)).rmdir()
+    (temp_train/str(n_train)).rmdir()
     
 
 def train(params, args, local_rank, world_rank, world_size):
@@ -137,6 +137,7 @@ def train(params, args, local_rank, world_rank, world_size):
         logging.info(f'max_steps {params.budget} / {(6 * param_count * tokens_per_step)}')
         params.num_iters = max_steps // (params.global_batch_size * seq_len)
         logging.info(f'Calculated {params.num_iters} iterations for compute budget {params.budget}')
+        logging.info(f'train_data_loader: {len(train_data_loader)}')
 
     iters = 0
     startEpoch = 0
