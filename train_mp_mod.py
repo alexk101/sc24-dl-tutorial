@@ -450,6 +450,7 @@ if __name__ == "__main__":
             run_num = '000'
         expDir: Path = baseDir / run_num
         expDir.mkdir(exist_ok=True, parents=True)
+        params.experiment_dir = os.path.abspath(expDir)
 
         # Setup data
         data_subset(params.n_train)
@@ -472,7 +473,7 @@ if __name__ == "__main__":
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
-    params.experiment_dir = os.path.abspath(expDir)
+    
 
     if world_rank == 0:
         data_subset(params.n_train)
