@@ -127,7 +127,7 @@ def validation(model, device, val_data_loader, loss_func, iters):
     with torch.inference_mode():
         with torch.no_grad():
             for i, data in enumerate(val_data_loader, 0):
-                with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
+                with autocast('cuda', enabled=params.amp_enabled, dtype=params.amp_dtype):
                     inp, tar = map(lambda x: x.to(device), data)
                     gen = model(inp)
                     val_loss += loss_func(gen, tar)
