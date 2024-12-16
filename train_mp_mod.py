@@ -234,7 +234,6 @@ def train(params, args, local_rank, world_rank, world_size):
                     torch.cuda.profiler.stop()
 
             torch.cuda.nvtx.range_push(f"step {i}")
-            iters += 1
             dat_start = time.time()
             torch.cuda.nvtx.range_push(f"data copy in {i}")
 
@@ -284,6 +283,7 @@ def train(params, args, local_rank, world_rank, world_size):
             tr_time += tr_end - tr_start
             dat_time += tr_start - dat_start
             step_count += 1
+            iters += 1
 
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
@@ -340,9 +340,13 @@ def train(params, args, local_rank, world_rank, world_size):
         val_loss /= valid_steps
         val_end = time.time()
         if world_rank == 0:
+            val_iters_per_sec = valid_steps / (val_end - val_start)
+            val_samples_per_sec = params["global_batch_size"] * iters_per_sec
             logging.info("  Avg val loss={}".format(val_loss.item()))
             logging.info("  Total validation time: {} sec".format(val_end - val_start))
             args.tboard_writer.add_scalar("Loss/valid", val_loss, iters)
+            args.tboard_writer.add_scalar("Avg val iters per sec", val_iters_per_sec, iters)
+            args.tboard_writer.add_scalar("Avg val samples per sec", val_samples_per_sec, iters)
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
             )
