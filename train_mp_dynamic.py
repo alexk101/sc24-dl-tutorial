@@ -39,7 +39,7 @@ def data_subset(n_train: int=25):
     target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
     all_data = list((target/'train').iterdir())
     all_data += list((target/'valid').iterdir())
-    sorted(all_data)
+    all_data = sorted(all_data)
     train_subset = all_data[:n_train]
     valid_subset = all_data[n_train:]
 
