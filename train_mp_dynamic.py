@@ -250,8 +250,8 @@ def train(params, args, local_rank, world_rank, world_size):
         )
         valid_steps = 0
         model.eval()
-        if world_rank == 0 :
-            logging.info('Starting validationa')
+        if world_rank == 0:
+            logging.info('Starting validation')
 
         # Validation
         with torch.inference_mode():

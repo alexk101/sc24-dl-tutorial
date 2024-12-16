@@ -29,16 +29,17 @@ from distributed.helpers import init_params_for_shared_weights
 
 from utils.plots import generate_images
 from pathlib import Path
+import json
 
 scratch = os.getenv("SCRATCH")
 temp_train = Path(f"{scratch}/temp_train")
 temp_val = Path(f"{scratch}/temp_val")
 
-def data_subset(n_train: int=1):
+def data_subset(n_train: int=25):
     target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
     all_data = list((target/'train').iterdir())
     all_data += list((target/'valid').iterdir())
-    sorted(all_data)
+    all_data = sorted(all_data)
     train_subset = all_data[:n_train]
     valid_subset = all_data[n_train:]
 
@@ -46,10 +47,12 @@ def data_subset(n_train: int=1):
     (temp_val/str(n_train)).mkdir(exist_ok=True, parents=True)
 
     for x in train_subset:
-        os.symlink(x, temp_train/str(n_train)/x.name)
+        if not (temp_train/str(n_train)/x.name).exists():
+            os.symlink(x, temp_train/str(n_train)/x.name)
     
     for x in valid_subset:
-        os.symlink(x, temp_val/str(n_train)/x.name)
+        if not (temp_val/str(n_train)/x.name).exists():
+            os.symlink(x, temp_val/str(n_train)/x.name)
 
 
 def clean_up_temp_dirs(n_train: int):
@@ -60,7 +63,6 @@ def clean_up_temp_dirs(n_train: int):
         os.unlink(x)
     os.unlink((temp_val/str(n_train)))
     os.unlink((temp_train/str(n_train)))
-
 
 
 def adjust_training_steps_for_budget(total_flops, param_count, batch_size, sequence_length):
@@ -116,12 +118,27 @@ def train(params, args, local_rank, world_rank, world_size):
     else:
         optimizer = optim.Adam(model.parameters(), lr=params.lr, betas=(0.9, 0.95))
 
+    param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     if world_rank == 0:
         logging.info(model)
         all_mem_gb = pynvml.nvmlDeviceGetMemoryInfo(nvml_handle).used / (
             1024.0 * 1024.0 * 1024.0
         )
         logging.info(f"Scaffolding memory high watermark: {all_mem_gb} GB.")
+        with open(f'{params.experiment_dir}/hparams.json', 'r') as file:
+            data = json.load(file)
+        data['parameters'] = param_count
+        with open(f'{params.experiment_dir}/hparams.json', 'w') as file:
+            json.dump(data, file, indent=4)
+
+    # Calculate iterations for budget
+    if params.budget:
+        # Calculate sequence length
+        seq_len = (360 // params.patch_size) * (720 // params.patch_size)
+        # Number of iterations to run based on desired flops
+        tokens_per_step = params.global_batch_size * seq_len
+        max_steps = int(params.budget // (6 * param_count * tokens_per_step))
+        params.num_iters = max_steps // (params.global_batch_size * seq_len)
 
     iters = 0
     startEpoch = 0
@@ -174,20 +191,7 @@ def train(params, args, local_rank, world_rank, world_size):
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
             )
-            # Log model params one time
-            param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-            args.tboard_writer.add_hparams({'model_size': param_count})
     
-    if params.budget:
-        # Calculate sequence length
-        seq_len = (360 // params.patch_size) * (720 // params.patch_size)
-        param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-        # Number of iterations to run based on desired flops
-        tokens_per_step = params.global_batch_size * seq_len
-        max_steps = int(params.budget // (6 * param_count * tokens_per_step))
-        params.num_iters = max_steps // (params.global_batch_size * seq_len)
-        
     params.num_epochs = params.num_iters // len(train_data_loader)
 
     iters = 0
@@ -334,131 +338,32 @@ def train(params, args, local_rank, world_rank, world_size):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--run_num",
-        default="00",
-        type=str,
-        help="tag for indexing the current experiment",
-    )
-    ########################
-    # Add to existing ArgumentParser
-    parser.add_argument(
-        "--scale_depth",
-        type=int,
-        default=1.0,
-        help="Scaling factor for number of transformer layers"
-    )
-    parser.add_argument(
-        "--scale_heads",
-        type=int,
-        default=1.0,
-        help="Scaling factor for number of attention heads"
-    )
-    parser.add_argument(
-        "--scale_dim",
-        type=int,
-        default=1.0,
-        help="Scaling factor for embedding dimension"
-    )
-    parser.add_argument(
-        "--n_train",
-        type=int,
-        default=1.0,
-        help="Number of years to use for training"
-    )
-    parser.add_argument(
-        "--exp_name",
-        type=str,
-        default='default',
-        help="Experiment name"
-    )
-    parser.add_argument(
-        "--budget",
-        default="0.0",
-        type=float,
-        help="Compute budget in FLOPS",
-    )
-    #########################
-    parser.add_argument(
-        "--yaml_config",
-        default="./config/ViT.yaml",
-        type=str,
-        help="path to yaml file containing training configs",
-    )
-    parser.add_argument(
-        "--config", default="base", type=str, help="name of desired config in yaml file"
-    )
-    parser.add_argument(
-        "--amp_mode",
-        default="none",
-        type=str,
-        choices=["none", "fp16", "bf16"],
-        help="select automatic mixed precision mode",
-    )
-    parser.add_argument(
-        "--enable_fused", action="store_true", help="enable fused Adam optimizer"
-    )
-    parser.add_argument(
-        "--enable_jit", action="store_true", help="enable JIT compilation"
-    )
-    parser.add_argument(
-        "--local_batch_size",
-        default=None,
-        type=int,
-        help="local batchsize (manually override global_batch_size config setting)",
-    )
-    parser.add_argument(
-        "--num_iters", default=None, type=int, help="number of iters to run"
-    )
-    parser.add_argument(
-        "--num_data_workers",
-        default=None,
-        type=int,
-        help="number of data workers for data loader",
-    )
-    parser.add_argument(
-        "--data_loader_config",
-        default=None,
-        type=str,
-        choices=["pytorch", "dali"],
-        help="dataloader configuration. choices: 'pytorch', 'dali'",
-    )
-    parser.add_argument(
-        "--bucket_cap_mb", default=25, type=int, help="max message bucket size in mb"
-    )
-    parser.add_argument(
-        "--disable_broadcast_buffers",
-        action="store_true",
-        help="disable syncing broadcasting buffers",
-    )
-    parser.add_argument(
-        "--noddp", action="store_true", help="disable DDP communication"
-    )
+    parser.add_argument("--run_num", default="00", type=str, help="tag for indexing the current experiment",)
+    parser.add_argument("--scale_depth", type=int, default=1.0, help="Scaling factor for number of transformer layers")
+    parser.add_argument("--scale_heads", type=int, default=1.0, help="Scaling factor for number of attention heads")
+    parser.add_argument("--scale_dim", type=int, default=1.0, help="Scaling factor for embedding dimension")
+    parser.add_argument("--n_train", type=int, default=1.0, help="Number of years to use for training")
+    parser.add_argument("--exp_name", type=str, default='default', help="Experiment name")
+    parser.add_argument("--budget", default="0.0", type=float, help="Compute budget in FLOPS",)
+    parser.add_argument("--yaml_config", default="./config/ViT.yaml", type=str, help="path to yaml file containing training configs")
+    parser.add_argument("--config", default="base", type=str, help="name of desired config in yaml file")
+    parser.add_argument("--amp_mode", default="none", type=str, choices=["none", "fp16", "bf16"], help="select automatic mixed precision mode")
+    parser.add_argument("--enable_fused", action="store_true", help="enable fused Adam optimizer")
+    parser.add_argument("--enable_jit", action="store_true", help="enable JIT compilation")
+    parser.add_argument("--local_batch_size", default=None, type=int, help="local batchsize (manually override global_batch_size config setting)",)
+    parser.add_argument("--num_iters", default=None, type=int, help="number of iters to run")
+    parser.add_argument("--num_data_workers", default=None, type=int, help="number of data workers for data loader",)
+    parser.add_argument("--data_loader_config", default=None, type=str, choices=["pytorch", "dali"], help="dataloader configuration. choices: 'pytorch', 'dali'")
+    parser.add_argument("--bucket_cap_mb", default=25, type=int, help="max message bucket size in mb")
+    parser.add_argument("--disable_broadcast_buffers", action="store_true", help="disable syncing broadcasting buffers",)
+    parser.add_argument("--noddp", action="store_true", help="disable DDP communication")
 
     # model parallelism arguments
-    parser.add_argument(
-        "--tensor_parallel",
-        default=1,
-        type=int,
-        help="Number of GPUs for tensor parallelism",
-    )
-    parser.add_argument(
-        "--context_parallel",
-        default=1,
-        type=int,
-        help="Number of GPUs for tensor parallelism",
-    )
-    parser.add_argument(
-        "--parallel_order",
-        default="tp-cp-dp",
-        type=str,
-        help="Order of ranks for parallelism",
-    )
+    parser.add_argument("--tensor_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
+    parser.add_argument("--context_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
+    parser.add_argument("--parallel_order", default="tp-cp-dp", type=str, help="Order of ranks for parallelism",)
 
     args = parser.parse_args()
-
-    run_num = args.run_num
-
     params = YParams(os.path.abspath(args.yaml_config), args.config)
     
     ########
@@ -467,6 +372,7 @@ if __name__ == "__main__":
     params.depth = args.scale_depth
     params.num_heads = args.scale_heads
     params.n_train = args.n_train
+    params.budget = args.budget
     ########
 
     # Update config with modified args
@@ -532,27 +438,30 @@ if __name__ == "__main__":
     params.data_num_shards = comm.get_size("dp")
     params.data_shard_id = comm.get_rank("dp")
 
-    # Set up directory
-    baseDir = Path(params.expdir)
-    existing = [int(x.name) for x in baseDir.iterdir()]
-    run_num = str(max(existing)).zfill()
-    expDir = baseDir / run_num
-
     if world_rank == 0:
-        if not os.path.isdir(expDir):
-            os.makedirs(expDir)
+        # Directory setup
+        baseDir = Path(scratch) / 'scaling_logs'
+        baseDir.mkdir(exist_ok=True, parents=True)
+
+        existing = [int(x.name) for x in baseDir.iterdir()]
+        if existing:
+            run_num = str(max(existing)+1).zfill(3)
+        else:
+            run_num = '000'
+        expDir: Path = baseDir / run_num
+        expDir.mkdir(exist_ok=True, parents=True)
+
+        # Setup data
+        data_subset(params.n_train)
+        params.train_data_path = str(temp_train/str(params.n_train))
+        params.valid_data_path = str(temp_val/str(params.n_train))
+        
         logging_utils.log_to_file(
             logger_name=None, log_filename=os.path.join(expDir, "out.log")
         )
         params.log()
-        args.tboard_writer = SummaryWriter(log_dir=os.path.join(expDir, "logs/"))
-
-        params.embed_dim = args.scale_dim
-        params.depth = args.scale_depth
-        params.num_heads = args.scale_heads
-        params.n_train = args.n_train
-        params.budget = args.budget
-
+        args.tboard_writer = SummaryWriter(log_dir=os.path.join(str(expDir), "logs/"))
+        
         hparams = {
             'embed': args.scale_dim,
             'layers': args.scale_depth,
@@ -561,8 +470,8 @@ if __name__ == "__main__":
             'dtype': str(amp_dtype),
             'compute_budget': args.budget
         }
-        args.tboard_writer.add_hparams(hparams)
-
+        with open(expDir/'hparams.json', "w") as f:
+            json.dump(hparams, f)
     params.experiment_dir = os.path.abspath(expDir)
 
     if world_rank == 0:
