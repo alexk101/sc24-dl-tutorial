@@ -485,10 +485,8 @@ if __name__ == "__main__":
         data_subset(params.n_train)
 
     train(params, args, local_rank, world_rank, world_size)
-
-    if world_rank == 0:
-        clean_up_temp_dirs(params.n_train)
-
     if params.distributed:
         torch.distributed.barrier()
     logging.info("DONE ---- rank %d" % world_rank)
+    if world_rank == 0:
+        clean_up_temp_dirs(params.n_train)
