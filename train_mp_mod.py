@@ -63,14 +63,7 @@ def clean_up_temp_dirs(n_train: int):
         os.unlink(x)
     os.unlink((temp_val/str(n_train)))
     os.unlink((temp_train/str(n_train)))
-
-
-def adjust_training_steps_for_budget(total_flops, param_count, batch_size, sequence_length):
-    """Adjust the number of training steps to match a specific compute budget"""
-    tokens_per_step = batch_size * sequence_length
-    max_steps = total_flops // (6 * param_count * tokens_per_step)
-    return int(max_steps)
-
+    
 
 def train(params, args, local_rank, world_rank, world_size):
     # set device and benchmark mode
@@ -135,9 +128,12 @@ def train(params, args, local_rank, world_rank, world_size):
     if params.budget:
         # Calculate sequence length
         seq_len = (360 // params.patch_size) * (720 // params.patch_size)
+        logging.info(f'seq_len {seq_len}')
         # Number of iterations to run based on desired flops
         tokens_per_step = params.global_batch_size * seq_len
+        logging.info(f'tokens_per_step {tokens_per_step}')
         max_steps = int(params.budget // (6 * param_count * tokens_per_step))
+        logging.info(f'max_steps {max_steps}')
         params.num_iters = max_steps // (params.global_batch_size * seq_len)
         logging.info(f'Calculated {params.num_iters} iterations for compute budget {params.budget}')
 
