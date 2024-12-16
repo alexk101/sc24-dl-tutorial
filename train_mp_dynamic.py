@@ -93,27 +93,6 @@ def init_logs(model, device, train_data_loader, val_data_loader, loss_func, args
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
             )
 
-
-def log_iter(args, step_count, start, end, epoch, iters, tr_loss, optimizer, inp, tar, gen):
-    iters_per_sec = step_count / (end - start)
-    samples_per_sec = params["global_batch_size"] * iters_per_sec
-    logging.info(
-        "Time taken for epoch %i is %f sec, avg %f samples/sec",
-        epoch + 1,
-        end - start,
-        samples_per_sec,
-    )
-    logging.info("  Avg train loss=%f" % np.mean(tr_loss))
-    args.tboard_writer.add_scalar("Loss/train", np.mean(tr_loss), iters)
-    args.tboard_writer.add_scalar(
-        "Learning Rate", optimizer.param_groups[0]["lr"], iters
-    )
-    args.tboard_writer.add_scalar("Avg iters per sec", iters_per_sec, iters)
-    args.tboard_writer.add_scalar("Avg samples per sec", samples_per_sec, iters)
-    fig = generate_images([inp, tar, gen])
-    args.tboard_writer.add_figure("Visualization, t2m", fig, iters, close=True)
-
-
 def train(params, args, local_rank, world_rank, world_size):
     # set device and benchmark mode
     torch.backends.cudnn.benchmark = True
@@ -201,14 +180,14 @@ def train(params, args, local_rank, world_rank, world_size):
         tr_loss = []
         step_count = 0
 
-        for batch_idx, (inp, tar) in enumerate(train_data_loader):
+        for batch_idx, data in enumerate(train_data_loader):
             torch.distributed.all_reduce(
                 global_step, op=torch.distributed.ReduceOp.MAX, group=comm.get_group("dp")
             )
             if global_step.item() >= params.num_iters:
                 break
 
-            inp, tar = inp.to(device), tar.to(device)
+            inp, tar = map(lambda x: x.to(device), data)
 
             optimizer.zero_grad()
             with autocast('cuda', enabled=params.amp_enabled, dtype=params.amp_dtype):
@@ -234,6 +213,8 @@ def train(params, args, local_rank, world_rank, world_size):
             step_count += 1
             global_step += 1
 
+        if global_step.item() >= params.num_iters:
+            break
         torch.cuda.synchronize()
         end = time.time()
         # Log training progress
@@ -242,7 +223,24 @@ def train(params, args, local_rank, world_rank, world_size):
             # Log memory usage
             mem_info = pynvml.nvmlDeviceGetMemoryInfo(nvml_handle)
             logging.info(f"Rank {world_rank}, Step {global_step}: Memory Used: {mem_info.used / (1024 ** 3):.2f} GB, Free: {mem_info.free / (1024 ** 3):.2f} GB")
-            log_iter(args, step_count, start, end, epoch, global_step, tr_loss, optimizer, inp, tar, gen)
+            iters_per_sec = step_count / (end - start)
+            samples_per_sec = params["global_batch_size"] * iters_per_sec
+            logging.info(
+                "Time taken for epoch %i is %f sec, avg %f samples/sec",
+                epoch + 1,
+                end - start,
+                samples_per_sec,
+            )
+            logging.info("  Avg train loss=%f" % np.mean(tr_loss))
+            args.tboard_writer.add_scalar("Loss/train", np.mean(tr_loss), global_step)
+            args.tboard_writer.add_scalar(
+                "Learning Rate", optimizer.param_groups[0]["lr"], global_step
+            )
+            args.tboard_writer.add_scalar("Avg iters per sec", iters_per_sec, global_step)
+            args.tboard_writer.add_scalar("Avg samples per sec", samples_per_sec, global_step)
+            fig = generate_images([inp, tar, gen])
+            args.tboard_writer.add_figure("Visualization, t2m", fig, global_step, close=True)
+            logging.info(f"End of training epoch {epoch}")
         
         # Validations
         val_start = time.time()
@@ -252,6 +250,8 @@ def train(params, args, local_rank, world_rank, world_size):
         )
         valid_steps = 0
         model.eval()
+        if world_rank == 0 :
+            logging.info('Starting validationa')
 
         # Validation
         with torch.inference_mode():
@@ -274,7 +274,7 @@ def train(params, args, local_rank, world_rank, world_size):
         val_end = time.time()
         val_rmse /= valid_steps  # Avg validation rmse
         val_loss /= valid_steps
-        val_end = time.time()
+
         if world_rank == 0:
             logging.info("  Avg val loss={}".format(val_loss.item()))
             logging.info("  Total validation time: {} sec".format(val_end - val_start))
