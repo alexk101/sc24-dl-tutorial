@@ -30,7 +30,8 @@ from distributed.helpers import init_params_for_shared_weights
 from utils.plots import generate_images
 from pathlib import Path
 import json
-
+from datetime import datetime, timedelta
+import subprocess
 scratch = os.getenv("SCRATCH")
 temp_train = Path(f"{scratch}/temp_train")
 temp_val = Path(f"{scratch}/temp_val")
@@ -64,6 +65,53 @@ def clean_up_temp_dirs(n_train: int):
     (temp_val/str(n_train)).rmdir()
     (temp_train/str(n_train)).rmdir()
     
+
+def get_remaining_time():
+    """Get remaining time in seconds from SLURM_TIMELIMIT"""
+    if 'SLURM_JOB_ID' not in os.environ:
+        logging.info("Not running in SLURM environment")
+        return float('inf')
+    
+    job_id = os.environ['SLURM_JOB_ID']
+    try:
+        result = subprocess.run(['sacct', '-j', job_id, '--format=TimeLimit,StartTime', '-n'], 
+                              capture_output=True, text=True, check=True)
+        time_limit, start_time = result.stdout.split()
+        
+        # Parse time limit (format: [days-]hours:minutes:seconds)
+        if '-' in time_limit:
+            days, time_part = time_limit.split('-')
+            days = int(days)
+        else:
+            days = 0
+            time_part = time_limit
+        hours, minutes, seconds = map(int, time_part.split(':'))
+        total_seconds = days * 86400 + hours * 3600 + minutes * 60 + seconds
+        
+        # Parse start time
+        start_dt = datetime.strptime(start_time.strip(), '%Y-%m-%dT%H:%M:%S')
+        elapsed = (datetime.now() - start_dt).total_seconds()
+        
+        return max(0, total_seconds - elapsed)
+    except subprocess.CalledProcessError as e:
+        logging.warning(f"Failed to get SLURM job info: {e}")
+        return float('inf')
+    except ValueError as e:
+        logging.warning(f"Failed to parse SLURM time info: {e}")
+        return float('inf')
+
+def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
+    """Save checkpoint and exit gracefully"""
+    try:
+        save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
+        if world_rank == 0:
+            logging.info("Time limit approaching - saved checkpoint and exiting")
+        if params.distributed:
+            torch.distributed.barrier()  # Ensure all processes finish saving
+        sys.exit(0)
+    except Exception as e:
+        logging.error(f"Error during save_and_exit: {e}")
+        sys.exit(1)
 
 def train(params, args, local_rank, world_rank, world_size):
     # set device and benchmark mode
@@ -210,6 +258,10 @@ def train(params, args, local_rank, world_rank, world_size):
 
     iters = 0
     t1 = time.time()
+    # Track start time and time limit
+    start_time = time.time()
+    time_buffer = args.time_buffer  # Use command line argument instead of hardcoded value
+    
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
@@ -285,6 +337,19 @@ def train(params, args, local_rank, world_rank, world_size):
             step_count += 1
             iters += 1
 
+            # Check remaining time
+            remaining_time = get_remaining_time()
+            if remaining_time < time_buffer:
+                save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
+            
+            # Optional: Log time statistics
+            if world_rank == 0 and iters % params.logging_freq == 0:
+                elapsed_time = time.time() - start_time
+                remaining_time = get_remaining_time()
+                hours_remaining = remaining_time / 3600
+                logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
+                logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
+
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
 
@@ -359,6 +424,134 @@ def train(params, args, local_rank, world_rank, world_size):
     tottime = t2 - t1
     pynvml.nvmlShutdown()
 
+def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank):
+    """Save training checkpoint with model parallel support"""
+    if world_rank == 0:
+        # Save model configuration and training state
+        checkpoint = {
+            'model_state_dict': model.module.state_dict() if hasattr(model, 'module') else model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict() if scheduler is not None else None,
+            'iters': iters,
+            # Save model parallel configuration
+            'parallel_config': {
+                'tp_size': params.get('tp', 1),
+                'cp_size': params.get('cp', 1),
+                'parallel_order': params.get('order', 'tp-cp-dp'),
+            },
+            # Save model architecture config
+            'model_config': {
+                'embed_dim': params.embed_dim,
+                'depth': params.depth,
+                'num_heads': params.num_heads,
+                'patch_size': params.patch_size,
+            },
+            # Save training config
+            'training_config': {
+                'amp_dtype': str(params.amp_dtype),
+                'global_batch_size': params.global_batch_size,
+                'local_batch_size': params.local_batch_size,
+            }
+        }
+        
+        # Save to temporary file first
+        temp_checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt.tmp')
+        checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt')
+        torch.save(checkpoint, temp_checkpoint_path)
+        # Atomic rename to avoid corrupted checkpoints
+        os.rename(temp_checkpoint_path, checkpoint_path)
+        
+        # Save latest checkpoint symlink
+        latest_path = os.path.join(params.experiment_dir, 'checkpoint_latest.pt')
+        if os.path.exists(latest_path):
+            os.remove(latest_path)
+        os.symlink(f'checkpoint_{iters}.pt', latest_path)
+        
+        logging.info(f"Saved checkpoint at iteration {iters} to {checkpoint_path}")
+        
+        # Cleanup old checkpoints if needed
+        if hasattr(params, 'keep_n_checkpoints'):
+            try:
+                checkpoint_files = sorted([
+                    f for f in os.listdir(params.experiment_dir) 
+                    if f.startswith('checkpoint_') and f.endswith('.pt') and not f == 'checkpoint_latest.pt'
+                ])
+                for old_ckpt in checkpoint_files[:-params.keep_n_checkpoints]:
+                    try:
+                        os.remove(os.path.join(params.experiment_dir, old_ckpt))
+                        logging.info(f"Removed old checkpoint: {old_ckpt}")
+                    except OSError as e:
+                        logging.warning(f"Failed to remove checkpoint {old_ckpt}: {e}")
+            except Exception as e:
+                logging.warning(f"Error during checkpoint cleanup: {e}")
+
+def validate_checkpoint_config(checkpoint, params, world_rank):
+    """Validate checkpoint configuration matches current setup"""
+    if world_rank == 0:
+        # Check parallel configuration
+        ckpt_tp = checkpoint['parallel_config']['tp_size']
+        ckpt_cp = checkpoint['parallel_config']['cp_size']
+        current_tp = params.get('tp', 1)
+        current_cp = params.get('cp', 1)
+        
+        if ckpt_tp != current_tp or ckpt_cp != current_cp:
+            raise ValueError(
+                f"Checkpoint parallel config (TP={ckpt_tp}, CP={ckpt_cp}) "
+                f"doesn't match current config (TP={current_tp}, CP={current_cp})"
+            )
+            
+        # Check model architecture
+        for key in ['embed_dim', 'depth', 'num_heads', 'patch_size']:
+            ckpt_val = checkpoint['model_config'][key]
+            current_val = getattr(params, key)
+            if ckpt_val != current_val:
+                raise ValueError(
+                    f"Checkpoint model config '{key}' ({ckpt_val}) "
+                    f"doesn't match current config ({current_val})"
+                )
+        
+        logging.info("Checkpoint configuration validated successfully")
+
+def load_checkpoint(model, optimizer, scheduler, params, args, world_rank, local_rank):
+    """Load training checkpoint with model parallel support"""
+    # Support loading from iteration number or 'latest'
+    if args.resume_iter == -1:
+        checkpoint_path = os.path.join(params.experiment_dir, 'checkpoint_latest.pt')
+    else:
+        checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{args.resume_iter}.pt')
+    
+    if os.path.exists(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location=f'cuda:{local_rank}')
+        
+        # Validate configurations
+        validate_checkpoint_config(checkpoint, params, world_rank)
+        
+        # Load model weights with appropriate parallel configuration
+        if hasattr(model, 'module'):
+            model.module.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model.load_state_dict(checkpoint['model_state_dict'])
+            
+        # Sync shared weights for context parallel
+        if comm.get_size("cp") > 1:
+            init_params_for_shared_weights(model)
+            
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if scheduler is not None and checkpoint['scheduler_state_dict'] is not None:
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            
+        iters = checkpoint['iters']
+        
+        if world_rank == 0:
+            logging.info(f"Loaded checkpoint from iteration {iters}")
+            logging.info(f"Training config from checkpoint: {checkpoint['training_config']}")
+        
+        return iters
+    else:
+        if world_rank == 0:
+            logging.warning(f"No checkpoint found at {checkpoint_path}")
+        return 0
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run_num", default="00", type=str, help="tag for indexing the current experiment",)
@@ -383,8 +576,15 @@ if __name__ == "__main__":
 
     # model parallelism arguments
     parser.add_argument("--tensor_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
-    parser.add_argument("--context_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
+    parser.add_argument("--context_parallel", default=1, type=int, help="Number of GPUs for context parallelism")
     parser.add_argument("--parallel_order", default="tp-cp-dp", type=str, help="Order of ranks for parallelism",)
+
+    # checkpointing arguments
+    parser.add_argument("--resume_iter", type=int, default=0, help="iteration to resume training from (-1 for latest)")
+    parser.add_argument("--checkpoint_freq", type=int, default=1000, help="frequency (in iterations) to save checkpoints")
+
+    # time limit arguments
+    parser.add_argument("--time_buffer", type=int, default=300, help="buffer time in seconds before SLURM time limit")
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)

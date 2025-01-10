@@ -1,17 +1,17 @@
 import marimo
 
-__generated_with = "0.9.34"
+__generated_with = "0.10.2"
 app = marimo.App(width="medium")
 
 
 @app.cell
-def __():
+def _():
     import marimo as mo
     return (mo,)
 
 
 @app.cell
-def __():
+def _():
     import os
     import glob
     import numpy as np
@@ -39,7 +39,7 @@ def __():
 
 
 @app.cell
-def __(Path, defaultdict, pl, plt, sns):
+def _(Path, defaultdict, pl, plt, sns):
     from networks import vit
     from utils.YParams import YParams
     import torch
@@ -113,7 +113,7 @@ def __(Path, defaultdict, pl, plt, sns):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(
         r"""
         ## Flops vs Iterations
@@ -135,7 +135,7 @@ def __(mo):
 
 
 @app.cell
-def __(EventAccumulator, Path, defaultdict, glob, pl):
+def _(EventAccumulator, Path, defaultdict, glob, pl):
     def get_config_details(run_path):
         """Parse config string like 'dim128_depth6_heads4' into dict"""
 
@@ -223,69 +223,69 @@ def __(EventAccumulator, Path, defaultdict, glob, pl):
 
 
 @app.cell
-def __(extract_metrics):
-    # target = '/Users/alexdev/Documents/research/phd/projects/sc24-dl-tutorial'
-    target = '/home/alexk101/sc24-dl-tutorial'
+def _(extract_metrics):
+    target = '/Users/alexdev/Documents/research/phd/projects/sc24-dl-tutorial'
+    # target = '/home/alexk101/sc24-dl-tutorial'
     results_df, ts_df = extract_metrics(target)
     # results_df
     return results_df, target, ts_df
 
 
 @app.cell
-def __():
+def _():
     # ts_df
     return
 
 
 @app.cell
-def __(results_df, ts_df):
+def _(results_df, ts_df):
     all_data = ts_df.join(results_df, on='run')
     # all_data
     return (all_data,)
 
 
 @app.cell
-def __():
+def _():
     acc_vars = ['rmse', 'val_loss', 'train_loss']
     perf_vars = ['samples/sec']
     return acc_vars, perf_vars
 
 
 @app.cell
-def __(all_data, pl):
+def _(all_data, pl):
     layer_exps = all_data.filter(pl.col('run').str.contains('L'))
     print(layer_exps['run'].unique().to_list())
     return (layer_exps,)
 
 
 @app.cell
-def __(acc_vars, layer_exps, pl, sns):
+def _(acc_vars, layer_exps, pl, sns):
     head_acc_dat = layer_exps.filter(pl.col('series').is_in(acc_vars))
     sns.relplot(head_acc_dat, x='epoch', y='value', col='series', hue='num_heads', kind='line')
     return (head_acc_dat,)
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Accuracy vs Number of Attention Heads""")
     return
 
 
 @app.cell
-def __(layer_exps, perf_vars, pl, sns):
+def _(layer_exps, perf_vars, pl, sns):
     head_perf_dat = layer_exps.filter((pl.col('series').is_in(perf_vars)) & (pl.col('depth')==12))
     sns.relplot(head_perf_dat, x='epoch', y='value', col='series', hue='num_heads', kind='line')
     return (head_perf_dat,)
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Performance vs Number of Attention Heads""")
     return
 
 
 @app.cell
-def __(head_acc_dat, head_perf_dat, pl, sns):
+def _(head_acc_dat, head_perf_dat, pl, sns):
     temp = []
     for heads in head_acc_dat['num_heads'].unique():
         head_data = head_acc_dat.filter(pl.col('num_heads')==heads)
@@ -297,57 +297,57 @@ def __(head_acc_dat, head_perf_dat, pl, sns):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Accuracy/Performance vs Number of Attention Heads""")
     return
 
 
 @app.cell
-def __(acc_vars, layer_exps, pl, sns):
+def _(acc_vars, layer_exps, pl, sns):
     layer_acc_dat = layer_exps.filter((pl.col('series').is_in(acc_vars))&(pl.col('num_heads')==8))
     sns.relplot(layer_acc_dat, x='epoch', y='value', col='series', hue='depth', kind='line')
     return (layer_acc_dat,)
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Accuracy vs Depth""")
     return
 
 
 @app.cell
-def __(layer_exps, perf_vars, pl, sns):
+def _(layer_exps, perf_vars, pl, sns):
     layer_perf_dat = layer_exps.filter((pl.col('series').is_in(perf_vars)) & (pl.col('num_heads')==8))
     sns.relplot(layer_perf_dat, x='epoch', y='value', col='series', hue='depth', kind='line')
     return (layer_perf_dat,)
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Performance vs Depth""")
     return
 
 
 @app.cell
-def __(layer_acc_dat, layer_perf_dat, pl, sns):
+def _(layer_acc_dat, layer_perf_dat, pl, sns):
     temp_2 = []
     for depth in layer_acc_dat['depth'].unique():
         layer_data = layer_acc_dat.filter(pl.col('depth')==depth)
         layer_perf = layer_perf_dat.filter(pl.col('depth')==depth)['value'].mean()
         temp_2.append(layer_data.with_columns(pl.col('value')/layer_perf))
     layer_perf_acc = pl.concat(temp_2)
-    sns.relplot(layer_perf_acc, x='epoch', y='value', col='series', hue='depth', kind='line')
+    sns.relplot(layer_perf_acc.to_pandas(), x='epoch', y='value', col='series', hue='depth', kind='line')
     return depth, layer_data, layer_perf, layer_perf_acc, temp_2
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Accuracy/Performance vs Depth""")
     return
 
 
 @app.cell
-def __(acc_vars, all_data, pl, sns):
+def _(acc_vars, all_data, pl, sns):
     all_embedding = all_data.filter(pl.col('run').str.contains('emb'))
     all_embedding = all_data.filter(~pl.col('run').str.contains('val'))
     all_embedding = all_embedding.filter(~pl.col('embed_dim').is_in([384, 768, 576]))
@@ -357,7 +357,7 @@ def __(acc_vars, all_data, pl, sns):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(
         r"""
         ## Accuracy vs Embedding Dimension
@@ -369,20 +369,20 @@ def __(mo):
 
 
 @app.cell
-def __(all_embedding, perf_vars, pl, sns):
+def _(all_embedding, perf_vars, pl, sns):
     emb_perf_dat = all_embedding.filter(pl.col('series').is_in(perf_vars))
     sns.relplot(emb_perf_dat, x='epoch', y='value', col='series', hue='embed_dim', kind='line')
     return (emb_perf_dat,)
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Performance vs Embedding Dimension""")
     return
 
 
 @app.cell
-def __(emb_acc_dat, emb_perf_dat, pl, sns):
+def _(emb_acc_dat, emb_perf_dat, pl, sns):
     temp_3 = []
     for emb in emb_acc_dat['embed_dim'].unique():
         emb_data = emb_acc_dat.filter(pl.col('embed_dim')==emb)
@@ -394,13 +394,13 @@ def __(emb_acc_dat, emb_perf_dat, pl, sns):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Accuracy/Performance vs Embedding Dimension""")
     return
 
 
 @app.cell
-def __(acc_vars, all_data, pl, sns):
+def _(acc_vars, all_data, pl, sns):
     dataset_scaling = all_data.filter(pl.col('run').str.contains('val'))
     dataset_acc_dat = dataset_scaling.filter(pl.col('series').is_in(acc_vars))
     sns.relplot(dataset_acc_dat, x='epoch', y='value', col='series', hue='train_years', kind='line')
@@ -408,7 +408,7 @@ def __(acc_vars, all_data, pl, sns):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(
         r"""
         ### Accuracy vs Dataset Size
@@ -432,11 +432,11 @@ def __(mo):
 
 
 @app.cell
-def __(EventAccumulator, Path, add_trace, defaultdict, json, pl):
+def _(EventAccumulator, Path, add_trace, defaultdict, json, pl):
     def load_new_logs(target: Path):
         output_params = defaultdict(list)
         output_traces = defaultdict(list)
-        
+
         for run_dir in target.iterdir():
             ea = EventAccumulator(str(run_dir/'logs'))
             ea.Reload()
@@ -452,45 +452,44 @@ def __(EventAccumulator, Path, add_trace, defaultdict, json, pl):
             add_trace(ea, output_traces, 'train_loss', 'Loss/train', exp)
             add_trace(ea, output_traces, 'samples/sec', 'Avg samples per sec', exp)
         return pl.DataFrame(output_traces).join(pl.DataFrame(output_params), on='run')
-            
     return (load_new_logs,)
 
 
 @app.cell
-def __(Path, load_new_logs, pl):
+def _(Path, load_new_logs, pl):
     target_new_logs = Path('/home/alexk101/scaling_logs')
     dtype_exps = load_new_logs(target_new_logs).filter(pl.col('run')!='001')
     return dtype_exps, target_new_logs
 
 
 @app.cell
-def __(acc_vars, dtype_exps, pl, sns):
+def _(acc_vars, dtype_exps, pl, sns):
     dtype_acc_dat = dtype_exps.filter(pl.col('series').is_in(acc_vars))
     sns.relplot(dtype_acc_dat, x='epoch', y='value', col='series', hue='dtype', kind='line')
     return (dtype_acc_dat,)
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Accuracy vs Dtype""")
     return
 
 
 @app.cell
-def __(dtype_exps, perf_vars, pl, sns):
+def _(dtype_exps, perf_vars, pl, sns):
     dtype_perf_dat = dtype_exps.filter(pl.col('series').is_in(perf_vars))
     sns.relplot(dtype_perf_dat, x='epoch', y='value', col='series', hue='dtype', kind='line')
     return (dtype_perf_dat,)
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Performance vs Dtype""")
     return
 
 
 @app.cell
-def __(dtype_acc_dat, dtype_exps, dtype_perf_dat, pl, sns):
+def _(dtype_acc_dat, dtype_exps, dtype_perf_dat, pl, sns):
     temp_4 = []
     for dtype in dtype_exps['dtype'].unique():
         dtype_data = dtype_acc_dat.filter(pl.col('dtype')==dtype)
@@ -502,7 +501,7 @@ def __(dtype_acc_dat, dtype_exps, dtype_perf_dat, pl, sns):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""## Accuracy/Performance vs Dtype""")
     return
 

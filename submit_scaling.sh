@@ -5,12 +5,22 @@
 #SBATCH --ntasks-per-node 4
 #SBATCH --cpus-per-task 32
 #SBATCH --gpus-per-node 4
+#SBATCH --signal=B:USR1@90  # Send signal 10 minutes before time limit
 #SBATCH --time=00:30:00
 #SBATCH --image=nersc/pytorch:24.06.02
 #SBATCH --module=gpu,nccl-plugin
 #SBATCH -J vit-era5-mp
 #SBATCH -o %x-%j.out
 
+# Handle SLURM signals
+# These are used to handle the time limit and checkpointing
+cleanup_handler() {
+    echo "Received cleanup signal - terminating job"
+    scancel $SLURM_JOB_ID
+}
+trap 'cleanup_handler' USR1
+
+# Set up the data and log directories
 DATADIR=/pscratch/sd/s/shas1693/data/sc24_tutorial_data
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
