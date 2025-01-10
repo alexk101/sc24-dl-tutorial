@@ -66,37 +66,48 @@ def clean_up_temp_dirs(n_train: int):
     
 
 def get_remaining_time():
-    """Get remaining time in seconds from SLURM_TIMELIMIT"""
+    """Get remaining time in seconds from SLURM environment variables"""
     if 'SLURM_JOB_ID' not in os.environ:
         logging.info("Not running in SLURM environment")
         return float('inf')
     
-    job_id = os.environ['SLURM_JOB_ID']
     try:
-        result = subprocess.run(['sacct', '-j', job_id, '--format=TimeLimit,StartTime', '-n'], 
-                              capture_output=True, text=True, check=True)
-        time_limit, start_time = result.stdout.split()
-        
-        # Parse time limit (format: [days-]hours:minutes:seconds)
+        # Get time limit from SLURM_TIMELIMIT (format: MM:SS or HH:MM:SS or D-HH:MM:SS)
+        time_limit = os.environ.get('SLURM_TIMELIMIT', '')
+        if not time_limit:
+            return float('inf')
+            
+        # Parse time limit
         if '-' in time_limit:
             days, time_part = time_limit.split('-')
             days = int(days)
         else:
             days = 0
             time_part = time_limit
-        hours, minutes, seconds = map(int, time_part.split(':'))
+            
+        # Handle different time formats
+        time_parts = time_part.split(':')
+        if len(time_parts) == 2:  # MM:SS
+            hours = 0
+            minutes, seconds = map(int, time_parts)
+        else:  # HH:MM:SS
+            hours, minutes, seconds = map(int, time_parts)
+            
         total_seconds = days * 86400 + hours * 3600 + minutes * 60 + seconds
         
-        # Parse start time
-        start_dt = datetime.strptime(start_time.strip(), '%Y-%m-%dT%H:%M:%S')
-        elapsed = (datetime.now() - start_dt).total_seconds()
+        # Get start time from SLURM_JOB_START_TIME (Unix timestamp)
+        start_time = int(os.environ.get('SLURM_JOB_START_TIME', 0))
+        if start_time == 0:
+            return float('inf')
+            
+        # Calculate remaining time
+        elapsed = time.time() - start_time
+        remaining = max(0, total_seconds - elapsed)
         
-        return max(0, total_seconds - elapsed)
-    except subprocess.CalledProcessError as e:
-        logging.warning(f"Failed to get SLURM job info: {e}")
-        return float('inf')
-    except ValueError as e:
-        logging.warning(f"Failed to parse SLURM time info: {e}")
+        return remaining
+        
+    except Exception as e:
+        logging.warning(f"Failed to calculate remaining time: {e}")
         return float('inf')
 
 def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
@@ -337,8 +348,15 @@ def train(params, args, local_rank, world_rank, world_size):
             iters += 1
 
             # Check remaining time
-            remaining_time = get_remaining_time()
-            if remaining_time < time_buffer:
+            if world_rank == 0:
+                remaining_time = torch.tensor(get_remaining_time(), device=device)
+            else:
+                remaining_time = torch.tensor(0.0, device=device)
+                
+            if params.distributed:
+                torch.distributed.broadcast(remaining_time, src=0)
+            
+            if remaining_time.item() < time_buffer:
                 save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
             
             # Optional: Log time statistics
