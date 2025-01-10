@@ -32,6 +32,7 @@ from pathlib import Path
 import json
 from datetime import datetime, timedelta
 import subprocess
+
 scratch = os.getenv("SCRATCH")
 temp_train = Path(f"{scratch}/temp_train")
 temp_val = Path(f"{scratch}/temp_val")
@@ -39,10 +40,8 @@ temp_val = Path(f"{scratch}/temp_val")
 def data_subset(n_train: int=25):
     target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
     all_data = list((target/'train').iterdir())
-    all_data += list((target/'valid').iterdir())
     all_data = sorted(all_data)
     train_subset = all_data[:n_train]
-    valid_subset = all_data[n_train:]
 
     (temp_train/str(n_train)).mkdir(exist_ok=True, parents=True)
     (temp_val/str(n_train)).mkdir(exist_ok=True, parents=True)
@@ -51,7 +50,7 @@ def data_subset(n_train: int=25):
         if not (temp_train/str(n_train)/x.name).exists():
             os.symlink(x, temp_train/str(n_train)/x.name)
     
-    for x in valid_subset:
+    for x in (target/'valid').iterdir():
         if not (temp_val/str(n_train)/x.name).exists():
             os.symlink(x, temp_val/str(n_train)/x.name)
 
@@ -698,12 +697,9 @@ if __name__ == "__main__":
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
-    
-
-    if world_rank == 0:
-        data_subset(params.n_train)
 
     train(params, args, local_rank, world_rank, world_size)
+    
     if params.distributed:
         torch.distributed.barrier()
     logging.info("DONE ---- rank %d" % world_rank)
