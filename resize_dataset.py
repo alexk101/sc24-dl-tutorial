@@ -9,6 +9,10 @@ import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor
 import math
 
+# Set multiprocessing start method to 'spawn' for CUDA compatibility
+if __name__ == '__main__':
+    mp.set_start_method('spawn')
+
 def setup_logging(output_dir):
     """Setup logging configuration"""
     logging.basicConfig(
