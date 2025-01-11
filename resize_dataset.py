@@ -29,18 +29,25 @@ def process_chunk(chunk_data, device='cuda'):
     if device == 'cuda' and torch.cuda.is_available():
         # Move to GPU, resize, and back to CPU
         with torch.cuda.amp.autocast():
+            logging.info(f"Moving chunk to GPU (shape: {chunk_data.shape})")
             chunk_tensor = torch.from_numpy(chunk_data).to(device)
+            logging.info("Resizing on GPU")
             resized = chunk_tensor[:, :, :720, :]
+            logging.info("Moving result back to CPU")
             return resized.cpu().numpy()
     else:
         # Process on CPU
+        logging.info(f"Processing on CPU (shape: {chunk_data.shape})")
         return chunk_data[:, :, :720, :]
 
 def resize_file(input_file: Path, output_file: Path, chunk_size: int, device: str):
     """Resize a single HDF5 file by removing the last row"""
+    logging.info(f"Starting to process {input_file}")
+    
     with h5py.File(input_file, 'r') as f_in:
         data = f_in['fields']
         original_shape = data.shape
+        logging.info(f"Input shape: {original_shape}")
         
         # Calculate new shape and chunks
         new_shape = list(original_shape)
@@ -53,8 +60,11 @@ def resize_file(input_file: Path, output_file: Path, chunk_size: int, device: st
             min(720, 128),                  # height
             min(new_shape[3], 128)          # width
         )
+        logging.info(f"Output shape: {new_shape}")
+        logging.info(f"Chunk shape: {chunk_shape}")
         
         with h5py.File(output_file, 'w') as f_out:
+            logging.info("Creating output dataset...")
             # Create resized dataset with optimized chunking
             resized = f_out.create_dataset(
                 'fields', 
@@ -65,15 +75,26 @@ def resize_file(input_file: Path, output_file: Path, chunk_size: int, device: st
             )
             
             # Process data in chunks
-            for i in range(0, original_shape[0], chunk_size):
+            total_chunks = math.ceil(original_shape[0] / chunk_size)
+            logging.info(f"Processing {total_chunks} chunks...")
+            
+            for i in tqdm(range(0, original_shape[0], chunk_size), 
+                         desc=f"Processing {input_file.name}",
+                         total=total_chunks):
                 end_idx = min(i + chunk_size, original_shape[0])
+                logging.info(f"Reading chunk {i//chunk_size + 1}/{total_chunks}")
                 chunk_data = data[i:end_idx]
+                logging.info(f"Processing chunk on {device}")
                 resized_chunk = process_chunk(chunk_data, device)
+                logging.info(f"Writing chunk to output")
                 resized[i:end_idx] = resized_chunk
             
             # Copy attributes
+            logging.info("Copying attributes...")
             for key, value in f_in['fields'].attrs.items():
                 resized.attrs[key] = value
+
+    logging.info(f"Completed processing {input_file}")
 
 def process_file_wrapper(args):
     """Wrapper function for parallel processing"""
