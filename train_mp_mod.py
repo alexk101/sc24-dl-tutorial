@@ -72,37 +72,13 @@ def get_remaining_time():
         return float('inf')
     
     try:
-        # Get time limit from SLURM_TIMELIMIT (format: MM:SS or HH:MM:SS or D-HH:MM:SS)
-        time_limit = os.environ.get('SLURM_TIMELIMIT', '')
-        if not time_limit:
-            return float('inf')
-            
-        # Parse time limit
-        if '-' in time_limit:
-            days, time_part = time_limit.split('-')
-            days = int(days)
-        else:
-            days = 0
-            time_part = time_limit
-            
-        # Handle different time formats
-        time_parts = time_part.split(':')
-        if len(time_parts) == 2:  # MM:SS
-            hours = 0
-            minutes, seconds = map(int, time_parts)
-        else:  # HH:MM:SS
-            hours, minutes, seconds = map(int, time_parts)
-            
-        total_seconds = days * 86400 + hours * 3600 + minutes * 60 + seconds
-        
-        # Get start time from SLURM_JOB_START_TIME (Unix timestamp)
-        start_time = int(os.environ.get('SLURM_JOB_START_TIME', 0))
-        if start_time == 0:
+        # Get end and start times from SLURM
+        end_time = int(os.environ.get('SLURM_JOB_END_TIME', 0))
+        if end_time == 0:
             return float('inf')
             
         # Calculate remaining time
-        elapsed = time.time() - start_time
-        remaining = max(0, total_seconds - elapsed)
+        remaining = max(0, end_time - time.time())
         
         return remaining
         
