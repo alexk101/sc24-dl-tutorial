@@ -272,6 +272,12 @@ def train(params, args, local_rank, world_rank, world_size):
     start_time = time.time()
     time_buffer = args.time_buffer  # Use command line argument instead of hardcoded value
     
+    # Set default logging frequency if not specified
+    if not hasattr(params, 'logging_freq'):
+        params.logging_freq = 100  # Log every 100 iterations by default
+        if world_rank == 0:
+            logging.info(f"Setting default logging frequency to {params.logging_freq}")
+    
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings

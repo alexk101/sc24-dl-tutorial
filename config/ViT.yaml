@@ -20,6 +20,7 @@ base: &base
   lr: 5E-4
   warmup: 0
   optimizer: 'Adam'
+  logging_freq: 100  # Log progress every 100 iterations
 
   # Data
   data_loader_config: 'pytorch'
