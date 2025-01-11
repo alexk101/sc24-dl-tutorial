@@ -677,6 +677,7 @@ if __name__ == "__main__":
         params.experiment_dir = os.path.abspath(expDir)
 
         # Setup data
+        clean_up_temp_dirs(params.n_train)
         data_subset(params.n_train)
         params.train_data_path = str(temp_train/str(params.n_train))
         params.valid_data_path = str(temp_val/str(params.n_train))
