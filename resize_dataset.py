@@ -91,10 +91,10 @@ def main():
     parser.add_argument('--output_dir', type=Path, required=True,
                       help='Directory to save resized files')
     parser.add_argument('--chunk_size', type=int, default=32,
-                      help='Number of samples to process at once')
+                      help='Number of samples to process at once (default: 32, ~2.7GB per chunk)')
     parser.add_argument('--num_workers', type=int, 
-                      default=max(1, mp.cpu_count() // 2),
-                      help='Number of parallel processes')
+                      default=1,
+                      help='Number of parallel processes (default: 1 for single GPU)')
     parser.add_argument('--device', type=str, default='cuda',
                       help='Device to use for computations (cuda/cpu)')
     args = parser.parse_args()
