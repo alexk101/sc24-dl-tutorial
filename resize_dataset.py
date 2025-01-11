@@ -130,15 +130,15 @@ def main():
     
     # Log results
     successes = sum(1 for success, _ in results if success)
-    failures = [(name, msg) for success, msg in results if not success]
+    failures = [(msg, msg) for success, msg in results if not success]
     
     logging.info(f"\nProcessing complete!")
     logging.info(f"Successfully processed: {successes}/{len(input_files)} files")
     
     if failures:
         logging.error("\nFailed files:")
-        for _, msg in failures:
-            logging.error(msg)
+        for failure_msg, error_msg in failures:
+            logging.error(error_msg)
 
 if __name__ == "__main__":
     main() 
