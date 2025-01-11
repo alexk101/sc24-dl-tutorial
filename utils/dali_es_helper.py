@@ -32,6 +32,7 @@ class ERA5ES(object):
         self.shuffle = True if train else False
         
     def _get_files_stats(self, enable_logging):
+        logging.info(f"Getting files stats from {self.location}")
         self.files_paths = glob.glob(self.location + "/*.h5")
         self.files_paths.sort()
         self.years = [int(os.path.splitext(os.path.basename(x))[0][-4:]) for x in self.files_paths]
