@@ -642,10 +642,6 @@ if __name__ == "__main__":
     local_rank = comm.get_local_rank()
     params.distributed = world_size > 1
 
-    assert (
-        params["global_batch_size"] % comm.get_size("dp") == 0
-    ), f"Error, cannot evenly distribute {params['global_batch_size']} across {comm.get_size('dp')} GPU."
-
     if args.local_batch_size:
         # Manually override batch size
         params.local_batch_size = args.local_batch_size
@@ -657,6 +653,11 @@ if __name__ == "__main__":
         params.local_batch_size = int(
             params["global_batch_size"] // comm.get_size("dp")
         )
+
+    # Move assert after batch size calculations
+    assert (
+        params["global_batch_size"] % comm.get_size("dp") == 0
+    ), f"Error, cannot evenly distribute {params['global_batch_size']} across {comm.get_size('dp')} GPU."
 
     # for data loader, set the actual number of data shards and id
     params.data_num_shards = comm.get_size("dp")
