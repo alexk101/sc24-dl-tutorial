@@ -38,7 +38,7 @@ temp_train = Path(f"{scratch}/temp_train")
 temp_val = Path(f"{scratch}/temp_val")
 
 def data_subset(n_train: int=25):
-    target = Path('/pscratch/sd/a/akiefer/era5')
+    target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
     all_data = list((target/'train').iterdir())
     all_data = sorted(all_data)
     train_subset = all_data[:n_train]

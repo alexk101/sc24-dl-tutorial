@@ -21,7 +21,8 @@ cleanup_handler() {
 trap 'cleanup_handler' USR1
 
 # Set up the data and log directories
-DATADIR=/pscratch/sd/a/akiefer/era5
+# DATADIR=/pscratch/sd/a/akiefer/era5
+DATADIR=/pscratch/sd/s/shas1693/data/sc24_tutorial_data
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
 args="${@}"
