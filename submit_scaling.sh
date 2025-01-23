@@ -1,7 +1,7 @@
 #!/bin/bash 
 #SBATCH -C gpu
 #SBATCH -A m4790_g
-#SBATCH -q debug
+#SBATCH -q regular
 #SBATCH --ntasks-per-node 4
 #SBATCH --cpus-per-task 32
 #SBATCH --gpus-per-node 4

@@ -56,13 +56,19 @@ def data_subset(n_train: int=25):
 
 
 def clean_up_temp_dirs(n_train: int):
-    for x in (temp_train/str(n_train)).iterdir():
-        os.unlink(x)
+    if (temp_train/str(n_train)).exists():
+        for x in (temp_train/str(n_train)).iterdir():
+            os.unlink(x)
+        (temp_train/str(n_train)).rmdir()
+    else:
+        logging.info(f"Temp train dir {temp_train/str(n_train)} does not exist")
 
-    for x in (temp_val/str(n_train)).iterdir():
-        os.unlink(x)
-    (temp_val/str(n_train)).rmdir()
-    (temp_train/str(n_train)).rmdir()
+    if (temp_val/str(n_train)).exists():
+        for x in (temp_val/str(n_train)).iterdir():
+            os.unlink(x)
+        (temp_val/str(n_train)).rmdir()
+    else:
+        logging.info(f"Temp val dir {temp_val/str(n_train)} does not exist")
     
 
 def get_remaining_time():
