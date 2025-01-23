@@ -162,3 +162,4 @@ cython_debug/
 #.idea/
 # folder used for storing results of runs
 scaling_logs
+stats

@@ -12,7 +12,7 @@ base: &base
   # img_size: [720, 1440]
   dt: 1 
   global_batch_size: 16 # number of samples per training batch
-  num_iters: 30000
+  num_iters: 100000
   amp_mode: none
   enable_fused: false
   enable_jit: false

@@ -572,6 +572,7 @@ if __name__ == "__main__":
     parser.add_argument("--bucket_cap_mb", default=25, type=int, help="max message bucket size in mb")
     parser.add_argument("--disable_broadcast_buffers", action="store_true", help="disable syncing broadcasting buffers",)
     parser.add_argument("--noddp", action="store_true", help="disable DDP communication")
+    parser.add_argument("--n_nodes", default=4, type=int, help="number of nodes to used (not used here, but logged for later analysis)")
 
     # model parallelism arguments
     parser.add_argument("--tensor_parallel", default=1, type=int, help="Number of GPUs for tensor parallelism")
@@ -583,7 +584,8 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_freq", type=int, default=1000, help="frequency (in iterations) to save checkpoints")
 
     # time limit arguments
-    parser.add_argument("--time_buffer", type=int, default=300, help="buffer time in seconds before SLURM time limit")
+    parser.add_argument("--time_buffer", type=int, default=60, help="buffer time in seconds before SLURM time limit")
+    parser.add_argument("--time_limit", type=str, default="00:30:00", help="SLURM time limit (Not used here, but logged for later analysis)")
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
@@ -695,7 +697,9 @@ if __name__ == "__main__":
             'heads': args.scale_heads,
             'train_years': args.n_train,
             'dtype': str(amp_dtype),
-            'compute_budget': args.budget
+            'compute_budget': args.budget,
+            'n_nodes': args.n_nodes,
+            'time_limit': args.time_limit
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
