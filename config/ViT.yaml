@@ -113,7 +113,7 @@ bs2048_opt:
 # Model parallel configs
 mp: &mp
   <<: *base
-  num_iters: 30000
+  num_iters: 100000
   global_batch_size: 64
   lr: 1e-3
   num_data_workers: 8
