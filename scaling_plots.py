@@ -114,326 +114,112 @@ def _(Path, defaultdict, pl, plt, sns):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
-        ## Flops vs Iterations
+    mo.md("""
+    ## Flops vs Iterations
 
-        In this chinchilla papers, one way in which plots describing computation vs accuracy are created is by limiting the number of iterations the model does as a function of the desired number of Flops.
+    In this chinchilla papers, one way in which plots describing computation vs accuracy are created is by limiting the number of iterations the model does as a function of the desired number of Flops.
 
-        This is calculated as follows for a given budget $B$
+    This is calculated as follows for a given budget $B$
 
-        $\text{Sequence Length} = (x_{dim} // \text{Patch Size}) * (y_{dim} // \text{Patch Size})$
+    $\text{Sequence Length} = (x_{dim} // \text{Patch Size}) * (y_{dim} // \text{Patch Size})$
 
-        $\text{Tokens Per Step} = \text{Global Batch Size} * \text{Sequence Length}$
+    $\text{Tokens Per Step} = \text{Global Batch Size} * \text{Sequence Length}$
 
-        $\text{Max Steps} = floor(B // (6 * \text{Parameters} * \text{Tokens Per Step}))$
+    $\text{Max Steps} = floor(B // (6 * \text{Parameters} * \text{Tokens Per Step}))$
 
-        $\text{Iterations} = \text{Max Steps} // \text{Tokens Per Step}$
-        """
-    )
+    $\text{Iterations} = \text{Max Steps} // \text{Tokens Per Step}$
+    """)
     return
 
 
 @app.cell
-def _(EventAccumulator, Path, defaultdict, glob, pl):
-    def get_config_details(run_path):
-        """Parse config string like 'dim128_depth6_heads4' into dict"""
-
-        run_name = run_path.parent.stem
-        if 'L' in run_name:
-            emb = 384
-            layers = int(run_name.split('_')[1][1:])
-            heads = int(run_name.split('_')[2][1:])
-            train_years = 27
-        else:
-            emb = int(run_name.split('_')[1][3:])
-            layers = 12
-            heads = 8
-            train_years = 27
-            if 'val' in run_name:
-                train_years = int(run_name.split('_')[2][3:])
-
-        return {
-            'embed_dim': emb,
-            'depth': layers,
-            'num_heads': heads,
-            'train_years': train_years
-        }
+def _(mo):
+    mo.md("## Accuracy vs Number of Attention Heads")
+    return
 
 
-    def count_parameters(config):
-        """Calculate total trainable parameters for a given config"""
-        embed_dim = config['embed_dim']
-        depth = config['depth']
-        num_heads = config['num_heads']
-
-        # Transformer block parameters
-        attn_params = 4 * embed_dim * embed_dim  # Q,K,V matrices and output projection
-        mlp_params = 8 * embed_dim * embed_dim  # MLP with 4x hidden dim
-        block_params = attn_params + mlp_params
-
-        # Total parameters
-        total_params = depth * block_params
-        return total_params
+@app.cell
+def _(mo):
+    mo.md("## Performance vs Number of Attention Heads")
+    return
 
 
+@app.cell
+def _(mo):
+    mo.md("## Accuracy/Performance vs Number of Attention Heads")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("## Accuracy vs Depth")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("## Performance vs Depth")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("## Accuracy/Performance vs Depth")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""
+    ## Accuracy vs Embedding Dimension
+
+    The embedding dimension in a ViT model determines how well it can learn complex relationships. Patches from the spatial domain are linearly projected into the embedding dimension and are directly proportional to the weights. In this experiment, we hold constant the number of layers and heads, 8 and 12 respectively, while progressively increasing the embedding dimension by mutiples of 2, starting at 128. This shows that accuracy of the model increases as a function of embedding dimension.
+    """)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("## Performance vs Embedding Dimension")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("## Accuracy/Performance vs Embedding Dimension")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""
+    ### Accuracy vs Dataset Size
+
+    This experiment was run by varying the amount of data used for training vs validation. Our data consists of a downsampled version of the ERA5 dataset, which consists of multiple 4D variables (ie ones which vary across space and time). The values have a temporal resolution of 6 hours and a spatial resolution of 360 by 720 sampled on a Gaussian Grid. This is across 20 atmospheric variables. Data is further organized by year, with our set consisting of years 1990-2017. 
+
+    For this test, we incrementally reduce the number of years used in training while simultaneously increasing the number used for validation. We begin with 1 year for training and progressively increase this by powers of 2, with samples taken from the front of the validation dataset being moved to the training. 
+
+    The results of this experiment show that accuracy increases as a function of the training number. This is expected, as more data should help the model learn the atmospheric conditions more effectively.
+    """)
+    return
+
+
+@app.cell
+def _(EventAccumulator, Path, defaultdict, json, np, pl):
     def add_trace(ea: EventAccumulator, ts: dict, name: str, key: str, run_num: str):
-        if key not in ea.Tags()['scalars']:
-            print(f'Experiment {run_num} has no data for {key}. skipping')
-            return
-        ts_data = [x.value for x in ea.Scalars(key)]
-
-        ts['run'] += [run_num]*len(ts_data)
-        ts['series'] += [name] * len(ts_data)
-        ts['value'] += ts_data
-        ts['epoch'] += range(1, 1+len(ts_data))
-
-
-    def extract_metrics(logdir):
-        """Extract metrics from tensorboard logs"""
-        results = []
-        ts = defaultdict(list)
-
-        for run_dir in glob.glob(f"{logdir}/**/logs", recursive=True)[1:]:
-            run_path = Path(run_dir)
-            ea = EventAccumulator(run_dir)
-            ea.Reload()
-
-            run_num = run_dir.split('/')[-2]
-            # Get config details
-            config_details = get_config_details(run_path)
-            param_count = count_parameters(config_details)
-
-            add_trace(ea, ts, 'rmse', 'RMSE(u10m)/valid', run_num)
-            add_trace(ea, ts, 'val_loss', 'Loss/valid', run_num)
-            add_trace(ea, ts, 'train_loss', 'Loss/train', run_num)
-            add_trace(ea, ts, 'samples/sec', 'Avg samples per sec', run_num)
-
-            results.append({
-                'run': run_num,
-                'parameters': param_count,
-                'embed_dim': config_details['embed_dim'],
-                'depth': config_details['depth'],
-                'num_heads': config_details['num_heads'],
-                'train_years': config_details['train_years']
-            })
-
-        return pl.DataFrame(results), pl.DataFrame(ts)
-    return add_trace, count_parameters, extract_metrics, get_config_details
-
-
-@app.cell
-def _(extract_metrics):
-    target = '/Users/alexdev/Documents/research/phd/projects/sc24-dl-tutorial'
-    # target = '/home/alexk101/sc24-dl-tutorial'
-    results_df, ts_df = extract_metrics(target)
-    # results_df
-    return results_df, target, ts_df
-
-
-@app.cell
-def _():
-    # ts_df
-    return
-
-
-@app.cell
-def _(results_df, ts_df):
-    all_data = ts_df.join(results_df, on='run')
-    # all_data
-    return (all_data,)
-
-
-@app.cell
-def _():
-    acc_vars = ['rmse', 'val_loss', 'train_loss']
-    perf_vars = ['samples/sec']
-    return acc_vars, perf_vars
-
-
-@app.cell
-def _(all_data, pl):
-    layer_exps = all_data.filter(pl.col('run').str.contains('L'))
-    print(layer_exps['run'].unique().to_list())
-    return (layer_exps,)
-
-
-@app.cell
-def _(acc_vars, layer_exps, pl, sns):
-    head_acc_dat = layer_exps.filter(pl.col('series').is_in(acc_vars))
-    sns.relplot(head_acc_dat, x='epoch', y='value', col='series', hue='num_heads', kind='line')
-    return (head_acc_dat,)
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Accuracy vs Number of Attention Heads""")
-    return
-
-
-@app.cell
-def _(layer_exps, perf_vars, pl, sns):
-    head_perf_dat = layer_exps.filter((pl.col('series').is_in(perf_vars)) & (pl.col('depth')==12))
-    sns.relplot(head_perf_dat, x='epoch', y='value', col='series', hue='num_heads', kind='line')
-    return (head_perf_dat,)
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Performance vs Number of Attention Heads""")
-    return
-
-
-@app.cell
-def _(head_acc_dat, head_perf_dat, pl, sns):
-    temp = []
-    for heads in head_acc_dat['num_heads'].unique():
-        head_data = head_acc_dat.filter(pl.col('num_heads')==heads)
-        head_perf = head_perf_dat.filter(pl.col('num_heads')==heads)['value'].mean()
-        temp.append(head_data.with_columns(pl.col('value')/head_perf))
-    head_perf_acc = pl.concat(temp)
-    sns.relplot(head_perf_acc, x='epoch', y='value', col='series', hue='num_heads', kind='line')
-    return head_data, head_perf, head_perf_acc, heads, temp
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Accuracy/Performance vs Number of Attention Heads""")
-    return
-
-
-@app.cell
-def _(acc_vars, layer_exps, pl, sns):
-    layer_acc_dat = layer_exps.filter((pl.col('series').is_in(acc_vars))&(pl.col('num_heads')==8))
-    sns.relplot(layer_acc_dat, x='epoch', y='value', col='series', hue='depth', kind='line')
-    return (layer_acc_dat,)
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Accuracy vs Depth""")
-    return
-
-
-@app.cell
-def _(layer_exps, perf_vars, pl, sns):
-    layer_perf_dat = layer_exps.filter((pl.col('series').is_in(perf_vars)) & (pl.col('num_heads')==8))
-    sns.relplot(layer_perf_dat, x='epoch', y='value', col='series', hue='depth', kind='line')
-    return (layer_perf_dat,)
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Performance vs Depth""")
-    return
-
-
-@app.cell
-def _(layer_acc_dat, layer_perf_dat, pl, sns):
-    temp_2 = []
-    for depth in layer_acc_dat['depth'].unique():
-        layer_data = layer_acc_dat.filter(pl.col('depth')==depth)
-        layer_perf = layer_perf_dat.filter(pl.col('depth')==depth)['value'].mean()
-        temp_2.append(layer_data.with_columns(pl.col('value')/layer_perf))
-    layer_perf_acc = pl.concat(temp_2)
-    sns.relplot(layer_perf_acc.to_pandas(), x='epoch', y='value', col='series', hue='depth', kind='line')
-    return depth, layer_data, layer_perf, layer_perf_acc, temp_2
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Accuracy/Performance vs Depth""")
-    return
-
-
-@app.cell
-def _(acc_vars, all_data, pl, sns):
-    all_embedding = all_data.filter(pl.col('run').str.contains('emb'))
-    all_embedding = all_data.filter(~pl.col('run').str.contains('val'))
-    all_embedding = all_embedding.filter(~pl.col('embed_dim').is_in([384, 768, 576]))
-    emb_acc_dat = all_embedding.filter(pl.col('series').is_in(acc_vars))
-    sns.relplot(emb_acc_dat, x='epoch', y='value', col='series', hue='embed_dim', kind='line')
-    return all_embedding, emb_acc_dat
-
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
-        ## Accuracy vs Embedding Dimension
-
-        The embedding dimension in a ViT model determines how well it can learn complex relationships. Patches from the spatial domain are linearly projected into the embedding dimension and are directly proportional to the weights. In this experiment, we hold constant the number of layers and heads, 8 and 12 respectively, while progressively increasing the embedding dimension by mutiples of 2, starting at 128. This shows that accuracy of the model increases as a function of embedding dimension.
-        """
-    )
-    return
-
-
-@app.cell
-def _(all_embedding, perf_vars, pl, sns):
-    emb_perf_dat = all_embedding.filter(pl.col('series').is_in(perf_vars))
-    sns.relplot(emb_perf_dat, x='epoch', y='value', col='series', hue='embed_dim', kind='line')
-    return (emb_perf_dat,)
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Performance vs Embedding Dimension""")
-    return
-
-
-@app.cell
-def _(emb_acc_dat, emb_perf_dat, pl, sns):
-    temp_3 = []
-    for emb in emb_acc_dat['embed_dim'].unique():
-        emb_data = emb_acc_dat.filter(pl.col('embed_dim')==emb)
-        emb_perf = emb_perf_dat.filter(pl.col('embed_dim')==emb)['value'].mean()
-        temp_3.append(emb_data.with_columns(pl.col('value')/emb_perf))
-    emb_perf_acc = pl.concat(temp_3)
-    sns.relplot(emb_perf_acc, x='epoch', y='value', col='series', hue='embed_dim', kind='line')
-    return emb, emb_data, emb_perf, emb_perf_acc, temp_3
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""## Accuracy/Performance vs Embedding Dimension""")
-    return
-
-
-@app.cell
-def _(acc_vars, all_data, pl, sns):
-    dataset_scaling = all_data.filter(pl.col('run').str.contains('val'))
-    dataset_acc_dat = dataset_scaling.filter(pl.col('series').is_in(acc_vars))
-    sns.relplot(dataset_acc_dat, x='epoch', y='value', col='series', hue='train_years', kind='line')
-    return dataset_acc_dat, dataset_scaling
-
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
-        ### Accuracy vs Dataset Size
-
-        This experiment was run by varying the amount of data used for training vs validation. Our data consists of a downsampled version of the ERA5 dataset, which consists of multiple 4D variables (ie ones which vary across space and time). The values have a temporal resolution of 6 hours and a spatial resolution of 360 by 720 sampled on a Gaussian Grid. This is across 20 atmospheric variables. Data is further organized by year, with our set consisting of years 1990-2017. 
-
-        For this test, we incrementally reduce the number of years used in training while simultaneously increasing the number used for validation. We begin with 1 year for training and progressively increase this by powers of 2, with samples taken from the front of the validation dataset being moved to the training. 
-
-        | Training Number      | Validation  | Training    |
-        | -------------------- | ----------- | ----------- |
-        | 1                    | 1991 - 2017 | 1990 - 1991 |
-        | 2                    | 1992 - 2017 | 1990 - 1992 |
-        | 4                    | 1994 - 2017 | 1990 - 1994 |
-        | 8                    | 1998 - 2017 | 1990 - 1998 |
-        | 16                   | 2006 - 2017 | 1990 - 2006 |
-
-        The results of this experiment show that accuracy increases as a function of the training number. This is expected, as more data should help the model learn the atmospheric conditions more effectively.
-        """
-    )
-    return
-
-
-@app.cell
-def _(EventAccumulator, Path, add_trace, defaultdict, json, pl):
-    def load_new_logs(target: Path):
+            if key not in ea.Tags()['scalars']:
+                print(f'Experiment {run_num} has no data for {key}. skipping')
+                return
+            data = np.array([np.array([x.value, x.step]) for x in ea.Scalars(key)]).T
+
+            ts['run'] += [run_num]*len(data[0])
+            ts['series'] += [name] * len(data[0])
+            ts['value'] += data[0].tolist()
+            ts['epoch'] += range(1, 1+len(data[0]))
+            ts['iter'] += data[1].tolist()
+
+
+    def load_logs(target: Path):
         output_params = defaultdict(list)
         output_traces = defaultdict(list)
 
@@ -443,6 +229,10 @@ def _(EventAccumulator, Path, add_trace, defaultdict, json, pl):
             with open(run_dir/'hparams.json', 'r') as fp:
                 params = json.load(fp)
             exp = run_dir.name
+
+            if 'n_nodes' not in list(params.keys()):
+                print(run_dir)
+
             for key, val in params.items():
                 output_params[key].append(val)
             output_params['run'].append(exp)
@@ -452,57 +242,66 @@ def _(EventAccumulator, Path, add_trace, defaultdict, json, pl):
             add_trace(ea, output_traces, 'train_loss', 'Loss/train', exp)
             add_trace(ea, output_traces, 'samples/sec', 'Avg samples per sec', exp)
         return pl.DataFrame(output_traces).join(pl.DataFrame(output_params), on='run')
-    return (load_new_logs,)
+    return add_trace, load_logs
 
 
 @app.cell
-def _(Path, load_new_logs, pl):
-    target_new_logs = Path('/home/alexk101/scaling_logs')
-    dtype_exps = load_new_logs(target_new_logs).filter(pl.col('run')!='001')
-    return dtype_exps, target_new_logs
+def _(Path, load_logs, pl):
+    target_new_logs = Path('./scaling_logs')
+    exps = load_logs(target_new_logs)
+    exps = exps.with_columns(pl.col('time_limit').str.to_time())
+    exps = exps.cast({'run': pl.Int16})
+    exps
+    return exps, target_new_logs
 
 
 @app.cell
-def _(acc_vars, dtype_exps, pl, sns):
-    dtype_acc_dat = dtype_exps.filter(pl.col('series').is_in(acc_vars))
-    sns.relplot(dtype_acc_dat, x='epoch', y='value', col='series', hue='dtype', kind='line')
-    return (dtype_acc_dat,)
+def _(exps, pl, sns):
+    train_data = exps.filter(pl.col('series')=='rmse').sort('time_limit')
+    g = sns.relplot(train_data.to_pandas(), x='epoch', y='value', col='time_limit', kind='line', hue='train_years')
+    g.set(ylim=(0, 1))
+    return g, train_data
+
+
+@app.cell
+def _(sns, train_data):
+    g2 = sns.relplot(train_data.to_pandas(), x='iter', y='value', col='time_limit', kind='line', hue='train_years')
+    g2.set(ylim=(0, 1))
+    return (g2,)
+
+
+@app.cell
+def _(target_new_logs):
+    mem_usage = {}
+
+    for x in target_new_logs.iterdir():
+        with open(x/'out.log', 'r') as fp:
+            run_log = fp.readlines()
+        for line in run_log:
+            if "Memory" in line:
+                mem_usage[int(x.name)] = float(line.split(' ')[-2])
+
+    for key, val in sorted(mem_usage.items(), key=lambda x: x[0]):
+        print(f"{key}: {val}")
+
+    return fp, key, line, mem_usage, run_log, val, x
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""## Accuracy vs Dtype""")
+    mo.md("## Accuracy vs Dtype")
     return
 
 
 @app.cell
-def _(dtype_exps, perf_vars, pl, sns):
-    dtype_perf_dat = dtype_exps.filter(pl.col('series').is_in(perf_vars))
-    sns.relplot(dtype_perf_dat, x='epoch', y='value', col='series', hue='dtype', kind='line')
-    return (dtype_perf_dat,)
-
-
-@app.cell
 def _(mo):
-    mo.md(r"""## Performance vs Dtype""")
+    mo.md("## Performance vs Dtype")
     return
 
 
 @app.cell
-def _(dtype_acc_dat, dtype_exps, dtype_perf_dat, pl, sns):
-    temp_4 = []
-    for dtype in dtype_exps['dtype'].unique():
-        dtype_data = dtype_acc_dat.filter(pl.col('dtype')==dtype)
-        dtype_perf = dtype_perf_dat.filter(pl.col('dtype')==dtype)['value'].mean()
-        temp_4.append(dtype_data.with_columns(pl.col('value')/dtype_perf))
-    dtype_perf_acc = pl.concat(temp_4)
-    sns.relplot(dtype_perf_acc, x='epoch', y='value', col='series', hue='dtype', kind='line')
-    return dtype, dtype_data, dtype_perf, dtype_perf_acc, temp_4
-
-
-@app.cell
 def _(mo):
-    mo.md(r"""## Accuracy/Performance vs Dtype""")
+    mo.md("## Accuracy/Performance vs Dtype")
     return
 
 

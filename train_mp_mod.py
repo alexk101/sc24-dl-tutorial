@@ -260,6 +260,11 @@ def train(params, args, local_rank, world_rank, world_size):
         if world_rank == 0:
             logging.info(f"Setting default logging frequency to {params.logging_freq}")
     
+    # Set time check frequency (e.g., every 100 iterations)
+    time_check_freq = 100  # Can be adjusted based on your needs
+    if world_rank == 0:
+        logging.info(f"Will check remaining time every {time_check_freq} iterations")
+
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
@@ -276,7 +281,10 @@ def train(params, args, local_rank, world_rank, world_size):
 
         for i, data in enumerate(train_data_loader, 0):
             if iters >= params.num_iters:
-                break  
+                if world_rank == 0:
+                    logging.info("Reached maximum iterations, initiating shutdown...")
+                save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
+                
             if world_rank == 0:
                 if epoch == 3 and i == 0:
                     torch.cuda.profiler.start()
@@ -335,18 +343,21 @@ def train(params, args, local_rank, world_rank, world_size):
             step_count += 1
             iters += 1
 
-            # Check remaining time
-            if world_rank == 0:
-                remaining_time = torch.tensor(get_remaining_time(), device=device)
-            else:
-                remaining_time = torch.tensor(0.0, device=device)
+            # Check remaining time periodically
+            if iters % time_check_freq == 0:
+                if world_rank == 0:
+                    remaining_time = torch.tensor(get_remaining_time(), device=device)
+                else:
+                    remaining_time = torch.tensor(0.0, device=device)
+                    
+                if params.distributed:
+                    torch.distributed.broadcast(remaining_time, src=0)
                 
-            if params.distributed:
-                torch.distributed.broadcast(remaining_time, src=0)
-            
-            if remaining_time.item() < time_buffer:
-                save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
-            
+                if remaining_time.item() < time_buffer:
+                    if world_rank == 0:
+                        logging.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
+                    save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
+
             # Optional: Log time statistics
             if world_rank == 0 and iters % params.logging_freq == 0:
                 elapsed_time = time.time() - start_time
@@ -705,7 +716,8 @@ if __name__ == "__main__":
             'dtype': str(amp_dtype),
             'compute_budget': args.budget,
             'n_nodes': args.n_nodes,
-            'time_limit': args.time_limit
+            'time_limit': args.time_limit,
+            'local_batch_size': args.local_batch_size,
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)

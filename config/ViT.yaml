@@ -12,7 +12,7 @@ base: &base
   # img_size: [720, 1440]
   dt: 1 
   global_batch_size: 16 # number of samples per training batch
-  num_iters: 100000
+  num_iters: 500000
   amp_mode: none
   enable_fused: false
   enable_jit: false
@@ -65,7 +65,7 @@ opt: &opt
   data_loader_config: 'dali'
   num_data_workers: 8
   amp_mode: fp16
-  num_iters: 100000
+  num_iters: 500000
   enable_jit: true
   enable_fused: true
 
@@ -113,7 +113,7 @@ bs2048_opt:
 # Model parallel configs
 mp: &mp
   <<: *base
-  num_iters: 100000
+  num_iters: 500000
   global_batch_size: 64
   lr: 1e-3
   num_data_workers: 8
