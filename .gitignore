@@ -163,3 +163,4 @@ cython_debug/
 # folder used for storing results of runs
 scaling_logs
 stats
+archive

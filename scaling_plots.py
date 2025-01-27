@@ -271,20 +271,55 @@ def _(sns, train_data):
 
 
 @app.cell
-def _(target_new_logs):
-    mem_usage = {}
+def _(defaultdict, np, target_new_logs):
+    mem_usage = defaultdict(list)
 
     for x in target_new_logs.iterdir():
         with open(x/'out.log', 'r') as fp:
             run_log = fp.readlines()
         for line in run_log:
             if "Memory" in line:
-                mem_usage[int(x.name)] = float(line.split(' ')[-2])
+                mem_usage[int(x.name)].append(float(line.split(' ')[-2]))
 
     for key, val in sorted(mem_usage.items(), key=lambda x: x[0]):
-        print(f"{key}: {val}")
+        print(f"{key}: mean {np.mean(val):.2f} | std {np.std(val):.2f} | samples {len(val)}")
 
     return fp, key, line, mem_usage, run_log, val, x
+
+
+@app.cell
+def _(mem_usage, np, plt):
+    # M2 ≈ M1 * (E2/E1)²
+    def plot_mem_usage(sample):
+        # samp_func = np.mean
+        samp_func = np.max
+        measurement = samp_func(mem_usage[sample])
+
+        x = np.linspace(0, 2048, 16)
+        traces = {}
+        traces['fp16_local_batch_8'] = measurement * (x/512)**2
+        traces['fp16_local_batch_4'] = measurement * (x/512)**2 / 2
+        traces['fp16_local_batch_2'] = measurement * (x/512)**2 / 4
+
+        fig, ax = plt.subplots(1, 1)
+        ax.scatter(512, measurement, label=f'measurement')
+        for key, val in traces.items():
+            ax.plot(x, val, label=key)
+        ax.set_xlabel('Embedding Dimension')
+        ax.set_ylabel('Projected Memory Usage (GB)')
+        ax.set_title('Projected Memory Usage vs Embedding Dimension')
+        ax.axhline(y=40, color='r', linestyle='--', label='40GB GPU')
+        ax.legend()
+
+        # Calculate intercepts
+        intercepts = {}
+        for key, val in traces.items():
+            intercepts[key] = np.interp(40, val, x)
+            print(f'{key}: Max embedding dimension {intercepts[key]:.0f}')
+        return fig
+
+    plot_mem_usage(10)
+    return (plot_mem_usage,)
 
 
 @app.cell
