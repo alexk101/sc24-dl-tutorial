@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.10.2"
+__generated_with = "0.10.17"
 app = marimo.App(width="medium")
 
 
@@ -257,6 +257,7 @@ def _(Path, load_logs, pl):
 
 @app.cell
 def _(exps, pl, sns):
+    exps.write_parquet('./scaling_logs/exps.parquet')
     train_data = exps.filter(pl.col('series')=='rmse').sort('time_limit')
     g = sns.relplot(train_data.to_pandas(), x='epoch', y='value', col='time_limit', kind='line', hue='train_years')
     g.set(ylim=(0, 1))
@@ -283,7 +284,6 @@ def _(target_new_logs):
 
     for key, val in sorted(mem_usage.items(), key=lambda x: x[0]):
         print(f"{key}: {val}")
-
     return fp, key, line, mem_usage, run_log, val, x
 
 
