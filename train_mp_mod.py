@@ -3,15 +3,6 @@ import os
 import time
 import numpy as np
 import argparse
-import pynvml
-
-import torch
-import torch.optim as optim
-from torch.cuda.amp import autocast, GradScaler
-import torch.multiprocessing
-from torch.utils.tensorboard import SummaryWriter
-from torch.nn.parallel import DistributedDataParallel
-from torch.distributed import ReduceOp
 
 import logging
 from utils import logging_utils
@@ -22,6 +13,7 @@ from utils import get_data_loader_distributed
 from utils import comm
 from utils.loss import l2_loss, l2_loss_opt
 from utils.metrics import weighted_rmse
+from utils.data import data_subset, clean_up_temp_dirs, TEMP_TRAIN, TEMP_VAL, SCRATCH
 from networks import vit
 
 from distributed.mappings import init_ddp_model_and_reduction_hooks
@@ -30,46 +22,57 @@ from distributed.helpers import init_params_for_shared_weights
 from utils.plots import generate_images
 from pathlib import Path
 import json
-from datetime import datetime, timedelta
-import subprocess
 
-scratch = os.getenv("SCRATCH")
-temp_train = Path(f"{scratch}/temp_train")
-temp_val = Path(f"{scratch}/temp_val")
+# Vendor-agnostic PyTorch imports
+import torch.optim as optim
+import torch.multiprocessing
+from torch.utils.tensorboard import SummaryWriter
+from torch.nn.parallel import DistributedDataParallel
+from torch.distributed import ReduceOp
 
-def data_subset(n_train: int=25):
-    target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
-    all_data = list((target/'train').iterdir())
-    all_data = sorted(all_data)
-    train_subset = all_data[:n_train]
+# GPU vendor-specific imports
+import torch
+from utils.gpu_utils import (
+    NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND, 
+    get_gpu_info, initialize_gpu, get_profiler
+)
 
-    (temp_train/str(n_train)).mkdir(exist_ok=True, parents=True)
-    (temp_val/str(n_train)).mkdir(exist_ok=True, parents=True)
+# Import appropriate GPU monitoring tools
+if NVIDIA_AVAILABLE:
+    import pynvml
+    pynvml.nvmlInit()
+elif ROCM_AVAILABLE:
+    from rocm_smi import rocm_smi
+    rocm_smi.initialize()
 
-    for x in train_subset:
-        if not (temp_train/str(n_train)/x.name).exists():
-            os.symlink(x, temp_train/str(n_train)/x.name)
-    
-    for x in (target/'valid').iterdir():
-        if not (temp_val/str(n_train)/x.name).exists():
-            os.symlink(x, temp_val/str(n_train)/x.name)
+# Check for bfloat16 support
+BFLOAT16_AVAILABLE = False
+if NVIDIA_AVAILABLE:
+    BFLOAT16_AVAILABLE = torch.cuda.is_bf16_supported()
+    from torch.cuda.amp import autocast, GradScaler
+    logging.info(f"NVIDIA bfloat16 support: {BFLOAT16_AVAILABLE}")
+elif ROCM_AVAILABLE:
+    # Check ROCm version for bfloat16 support (available in ROCm 5.0+)
+    try:
+        BFLOAT16_AVAILABLE = torch.bfloat16 in torch.hip.get_device_properties(0).supported_dtypes
+    except:
+        BFLOAT16_AVAILABLE = False  # Fallback if can't determine
+    from torch.hip.amp import autocast, GradScaler
+    logging.info(f"AMD bfloat16 support: {BFLOAT16_AVAILABLE}")
+else:
+    from torch.cpu.amp import autocast, GradScaler
+    # CPU bfloat16 support depends on hardware (e.g., Intel CPUs with AVX512-BF16)
+    BFLOAT16_AVAILABLE = hasattr(torch.cpu, 'is_bf16_supported') and torch.cpu.is_bf16_supported()
+    logging.info(f"CPU bfloat16 support: {BFLOAT16_AVAILABLE}")
 
 
-def clean_up_temp_dirs(n_train: int):
-    if (temp_train/str(n_train)).exists():
-        for x in (temp_train/str(n_train)).iterdir():
-            os.unlink(x)
-        (temp_train/str(n_train)).rmdir()
-    else:
-        logging.info(f"Temp train dir {temp_train/str(n_train)} does not exist")
+def validate_amp_dtype(requested_dtype):
+    """Validate and adjust AMP dtype based on hardware support"""
+    if requested_dtype == torch.bfloat16 and not BFLOAT16_AVAILABLE:
+        logging.warning("BFloat16 requested but not supported by hardware. Falling back to FP16")
+        return torch.float16
+    return requested_dtype
 
-    if (temp_val/str(n_train)).exists():
-        for x in (temp_val/str(n_train)).iterdir():
-            os.unlink(x)
-        (temp_val/str(n_train)).rmdir()
-    else:
-        logging.info(f"Temp val dir {temp_val/str(n_train)} does not exist")
-    
 
 def get_remaining_time():
     """Get remaining time in seconds from SLURM environment variables"""
@@ -105,34 +108,36 @@ def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
         logging.error(f"Error during save_and_exit: {e}")
         sys.exit(1)
 
+# Get profiler once at module level
+profiler = get_profiler()
+
 def train(params, args, local_rank, world_rank, world_size):
-    # set device and benchmark mode
-    torch.backends.cudnn.benchmark = True
-    torch.cuda.set_device(local_rank)
-    device = torch.device("cuda:%d" % local_rank)
+    # Initialize GPU and get device handle
+    device, gpu_handle = initialize_gpu(local_rank)
 
-    # init pynvml and get handle
-    pynvml.nvmlInit()
-    nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(device.index)
+    # Validate and adjust AMP dtype based on hardware support
+    if hasattr(params, 'amp_dtype'):
+        params.amp_dtype = validate_amp_dtype(params.amp_dtype)
+        if world_rank == 0:
+            logging.info(f"Using AMP dtype: {params.amp_dtype}")
 
-    # get data loader
+    # Get data loader
     logging.info("rank %d, begin data loader init" % world_rank)
-
+    
     train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(
-        params, str(temp_train/str(params.n_train)), params.distributed, train=True
+        params, str(TEMP_TRAIN/str(params.n_train)), params.distributed, train=True
     )
     val_data_loader, valid_dataset = get_data_loader_distributed(
-        params, str(temp_val/str(params.n_train)), params.distributed, train=False
+        params, str(TEMP_VAL/str(params.n_train)), params.distributed, train=False
     )
     logging.info("rank %d, data loader initialized" % (world_rank))
 
-    # Sanity check: Log GPU details
-    gpu_name = torch.cuda.get_device_name(device)
-    total_memory = pynvml.nvmlDeviceGetMemoryInfo(nvml_handle).total / (1024 ** 3)
-    logging.info(f"Rank {world_rank}: Using GPU {local_rank} - {gpu_name}, Total GPU memory: {total_memory:.2f} GB")
-
-    # Log node details
-    logging.info(f"Rank {world_rank}/{world_size} running on node: {os.uname().nodename}")
+    # Log GPU details
+    gpu_info = get_gpu_info(local_rank)
+    logging.info(
+        f"Rank {world_rank}: Using {gpu_info['name']}, "
+        f"Total GPU memory: {gpu_info['total_memory']/(1024**3):.2f} GB"
+    )
 
     # Distributed all-reduce test
     test_tensor = torch.tensor(world_rank, device=device)
@@ -169,9 +174,8 @@ def train(params, args, local_rank, world_rank, world_size):
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     if world_rank == 0:
         logging.info(model)
-        all_mem_gb = pynvml.nvmlDeviceGetMemoryInfo(nvml_handle).used / (
-            1024.0 * 1024.0 * 1024.0
-        )
+        gpu_info = get_gpu_info(local_rank)
+        all_mem_gb = gpu_info['used_memory'] / (1024.0 * 1024.0 * 1024.0)
         logging.info(f"Scaffolding memory high watermark: {all_mem_gb} GB.")
         with open(f'{params.experiment_dir}/hparams.json', 'r') as file:
             data = json.load(file)
@@ -287,45 +291,60 @@ def train(params, args, local_rank, world_rank, world_size):
                 
             if world_rank == 0:
                 if epoch == 3 and i == 0:
-                    torch.cuda.profiler.start()
+                    if NVIDIA_AVAILABLE:
+                        torch.cuda.profiler.start()
+                    elif ROCM_AVAILABLE:
+                        torch.profiler.start()
                 if epoch == 3 and i == len(train_data_loader) - 1:
-                    torch.cuda.profiler.stop()
+                    if NVIDIA_AVAILABLE:
+                        torch.cuda.profiler.stop()
+                    elif ROCM_AVAILABLE:
+                        torch.profiler.stop()
 
-            torch.cuda.nvtx.range_push(f"step {i}")
+            if profiler:
+                profiler.range_push(f"step {i}")
+            
             dat_start = time.time()
-            torch.cuda.nvtx.range_push(f"data copy in {i}")
+            if profiler:
+                profiler.range_push(f"data copy in {i}")
 
             inp, tar = map(lambda x: x.to(device), data)
-            torch.cuda.nvtx.range_pop()  # copy in
+            if profiler:
+                profiler.range_pop()  # copy in
 
             tr_start = time.time()
             b_size = inp.size(0)
 
             optimizer.zero_grad()
 
-            torch.cuda.nvtx.range_push(f"forward")
+            if profiler:
+                profiler.range_push(f"forward")
             with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
                 loss = loss_func(gen, tar)
-            torch.cuda.nvtx.range_pop()  # forward
+            if profiler:
+                profiler.range_pop()  # forward
 
             if world_rank == 0 and i == 1:  # print the mem used
-                all_mem_gb = pynvml.nvmlDeviceGetMemoryInfo(nvml_handle).used / (
-                    1024.0 * 1024.0 * 1024.0
-                )
+                gpu_info = get_gpu_info(local_rank)
+                all_mem_gb = gpu_info['used_memory'] / (1024.0 * 1024.0 * 1024.0)
                 logging.info(f" Memory usage after forward pass: {all_mem_gb} GB.")
 
             if params.amp_dtype == torch.float16:
                 scaler.scale(loss).backward()
-                torch.cuda.nvtx.range_push(f"optimizer")
+                if profiler:
+                    profiler.range_push(f"optimizer")
                 scaler.step(optimizer)
-                torch.cuda.nvtx.range_pop()  # optimizer
+                if profiler:
+                    profiler.range_pop()  # optimizer
                 scaler.update()
             else:
                 loss.backward()
-                torch.cuda.nvtx.range_push(f"optimizer")
+                if profiler:
+                    profiler.range_push(f"optimizer")
                 optimizer.step()
-                torch.cuda.nvtx.range_pop()  # optimizer
+                if profiler:
+                    profiler.range_pop()  # optimizer
 
             if params.distributed:
                 torch.distributed.all_reduce(
@@ -333,7 +352,8 @@ def train(params, args, local_rank, world_rank, world_size):
                 )
             tr_loss.append(loss.item())
 
-            torch.cuda.nvtx.range_pop()  # step
+            if profiler:
+                profiler.range_pop()  # step
             # lr step
             scheduler.step()
 
@@ -438,7 +458,8 @@ def train(params, args, local_rank, world_rank, world_size):
     torch.cuda.synchronize()
     t2 = time.time()
     tottime = t2 - t1
-    pynvml.nvmlShutdown()
+    if NVIDIA_AVAILABLE:
+        pynvml.nvmlShutdown()
 
 def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank):
     """Save training checkpoint with model parallel support"""
@@ -684,7 +705,7 @@ if __name__ == "__main__":
 
     if world_rank == 0:
         # Directory setup
-        baseDir = Path(scratch) / 'scaling_logs'
+        baseDir = Path(SCRATCH) / 'scaling_logs'
         baseDir.mkdir(exist_ok=True, parents=True)
 
         existing = [int(x.name) for x in baseDir.iterdir()]
@@ -699,8 +720,8 @@ if __name__ == "__main__":
         # Setup data
         clean_up_temp_dirs(params.n_train)
         data_subset(params.n_train)
-        params.train_data_path = str(temp_train/str(params.n_train))
-        params.valid_data_path = str(temp_val/str(params.n_train))
+        params.train_data_path = str(TEMP_TRAIN/str(params.n_train))
+        params.valid_data_path = str(TEMP_VAL/str(params.n_train))
         
         logging_utils.log_to_file(
             logger_name=None, log_filename=os.path.join(expDir, "out.log")
