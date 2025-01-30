@@ -71,7 +71,7 @@ class TestDataGenerator:
             
             print(f"Generated test data: {file_path}")
 
-class InMemoryDataset(Dataset):
+class OnDemandDataset(Dataset):
     def __init__(self, mean_file, std_file, spatial=(100, 100), target_spatial=None, temporal=10, channels=5, distribution="normal"):
         self.mean = np.load(mean_file)
         self.std = np.load(std_file)
@@ -80,11 +80,9 @@ class InMemoryDataset(Dataset):
         self.temporal = temporal
         self.channels = channels
         self.distribution = distribution
-        
-        self.data = self.generate_data()
     
-    def generate_data(self):
-        shape = (self.temporal,) + self.spatial + (self.channels,)
+    def generate_single_sample(self):
+        shape = self.spatial + (self.channels,)
         if self.distribution == "normal":
             data = np.random.normal(loc=self.mean, scale=self.std, size=shape)
         elif self.distribution == "uniform":
@@ -95,7 +93,7 @@ class InMemoryDataset(Dataset):
             raise ValueError(f"Unsupported distribution: {self.distribution}")
         
         if self.spatial != self.target_spatial:
-            zoom_factors = (1, self.target_spatial[0] / self.spatial[0], self.target_spatial[1] / self.spatial[1], 1)
+            zoom_factors = (self.target_spatial[0] / self.spatial[0], self.target_spatial[1] / self.spatial[1], 1)
             data = zoom(data, zoom_factors, order=1)
         
         return torch.tensor(data, dtype=torch.float32)
@@ -104,7 +102,7 @@ class InMemoryDataset(Dataset):
         return self.temporal
     
     def __getitem__(self, idx):
-        return self.data[idx]
+        return self.generate_single_sample()
 
 if __name__ == "__main__":
     generator = TestDataGenerator(
@@ -113,7 +111,7 @@ if __name__ == "__main__":
     )
     generator.generate()
     
-    dataset = InMemoryDataset(
+    dataset = OnDemandDataset(
         mean_file="mean.npy", std_file="std.npy", spatial=(328, 720), target_spatial=(240, 480), temporal=10, channels=5
     )
     dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
