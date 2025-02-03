@@ -65,6 +65,7 @@ else:
     BFLOAT16_AVAILABLE = hasattr(torch.cpu, 'is_bf16_supported') and torch.cpu.is_bf16_supported()
     logging.info(f"CPU bfloat16 support: {BFLOAT16_AVAILABLE}")
 
+from torch.utils.flop_counter import FlopCounterMode
 
 def validate_amp_dtype(requested_dtype):
     """Validate and adjust AMP dtype based on hardware support"""
@@ -183,21 +184,6 @@ def train(params, args, local_rank, world_rank, world_size):
         with open(f'{params.experiment_dir}/hparams.json', 'w') as file:
             json.dump(data, file, indent=4)
 
-    # Calculate iterations for budget
-    if params.budget:
-        # Calculate sequence length
-        seq_len = (360 // params.patch_size) * (720 // params.patch_size)
-        logging.info(f'seq_len {seq_len}')
-        # Number of iterations to run based on desired flops
-        tokens_per_step = params.global_batch_size * seq_len
-        logging.info(f'tokens_per_step {tokens_per_step}')
-        max_steps = int(params.budget // (6 * param_count * tokens_per_step))
-        logging.info(f'param_count: {param_count}')
-        logging.info(f'max_steps {params.budget} / {(6 * param_count * tokens_per_step)}')
-        params.num_iters = max_steps // tokens_per_step
-        logging.info(f'Calculated {params.num_iters} iterations for compute budget {params.budget}')
-        logging.info(f'train_data_loader: {len(train_data_loader)}')
-
     iters = 0
     startEpoch = 0
 
@@ -268,6 +254,24 @@ def train(params, args, local_rank, world_rank, world_size):
     time_check_freq = 100  # Can be adjusted based on your needs
     if world_rank == 0:
         logging.info(f"Will check remaining time every {time_check_freq} iterations")
+
+    # Get initial FLOP count with a sample input
+    def count_training_flops(model, sample_input, loss_func):
+        flop_counter = FlopCounterMode()
+        with flop_counter:
+            with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
+                output = model(sample_input)
+                loss = loss_func(output, sample_input)  # Using input as dummy target
+            loss.backward()
+        return flop_counter.get_total_flops()
+
+    sample_input = next(iter(train_data_loader))[0].to(device)
+    model.train()
+    flops_per_step = count_training_flops(model, sample_input, loss_func)
+    total_flops = 0
+
+    if world_rank == 0:
+        logging.info(f"FLOPs per training step: {flops_per_step:,}")
 
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
@@ -378,13 +382,21 @@ def train(params, args, local_rank, world_rank, world_size):
                         logging.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
                     save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
 
-            # Optional: Log time statistics
+            # Optional: Log time and FLOP statistics
             if world_rank == 0 and iters % params.logging_freq == 0:
+                total_flops += flops_per_step
                 elapsed_time = time.time() - start_time
                 remaining_time = get_remaining_time()
                 hours_remaining = remaining_time / 3600
+                flops_per_second = total_flops / elapsed_time
+                
                 logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
                 logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
+                logging.info(f"Total FLOPs: {total_flops:,}")
+                logging.info(f"FLOPS/second: {flops_per_second:,.2f}")
+                
+                args.tboard_writer.add_scalar('Performance/total_flops', total_flops, iters)
+                args.tboard_writer.add_scalar('Performance/flops_per_second', flops_per_second, iters)
 
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
@@ -597,7 +609,6 @@ if __name__ == "__main__":
     parser.add_argument("--scale_dim", type=int, default=1.0, help="Scaling factor for embedding dimension")
     parser.add_argument("--n_train", type=int, default=1.0, help="Number of years to use for training")
     parser.add_argument("--exp_name", type=str, default='default', help="Experiment name")
-    parser.add_argument("--budget", default="0.0", type=float, help="Compute budget in FLOPS",)
     parser.add_argument("--yaml_config", default="./config/ViT.yaml", type=str, help="path to yaml file containing training configs")
     parser.add_argument("--config", default="base", type=str, help="name of desired config in yaml file")
     parser.add_argument("--amp_mode", default="none", type=str, choices=["none", "fp16", "bf16"], help="select automatic mixed precision mode")
@@ -634,7 +645,6 @@ if __name__ == "__main__":
     params.depth = args.scale_depth
     params.num_heads = args.scale_heads
     params.n_train = args.n_train
-    params.budget = args.budget
     ########
 
     # Update config with modified args
@@ -735,7 +745,6 @@ if __name__ == "__main__":
             'heads': args.scale_heads,
             'train_years': args.n_train,
             'dtype': str(amp_dtype),
-            'compute_budget': args.budget,
             'n_nodes': args.n_nodes,
             'time_limit': args.time_limit,
             'local_batch_size': args.local_batch_size,
