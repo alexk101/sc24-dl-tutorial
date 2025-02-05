@@ -112,7 +112,45 @@ def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
 # Get profiler once at module level
 profiler = get_profiler()
 
-def train(params, args, local_rank, world_rank, world_size):
+def validate_model(model, val_loader, device, params, loss_func, world_rank, comm=None):
+    model.eval()
+    val_loss = torch.zeros(1, device=device)
+    val_rmse = torch.zeros((params.n_out_channels), dtype=torch.float32, device=device)
+    valid_steps = 0
+    
+    with torch.inference_mode():
+        with torch.no_grad():
+            for i, data in enumerate(val_loader, 0):
+                with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
+                    inp, tar = map(lambda x: x.to(device), data)
+                    gen = model(inp)
+                    val_loss += loss_func(gen, tar)
+                    val_rmse += weighted_rmse(gen, tar)
+                valid_steps += 1
+
+                if params.distributed:
+                    torch.distributed.all_reduce(
+                        val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+                    )
+                    torch.distributed.all_reduce(
+                        val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
+                    )
+
+    val_rmse /= valid_steps
+    val_loss /= valid_steps
+    
+    return val_loss, val_rmse, valid_steps
+
+def train(params, args, local_rank, world_rank, world_size, hyperparameter_search=False):
+    # Initialize tracking variables for hyperparameter search
+    if hyperparameter_search:
+        best_val_rmse = float('inf')
+        patience_counter = 0
+        early_stop_patience = 5
+        val_freq = 100
+        training_start_time = time.time()
+        peak_memory = 0
+    
     # Initialize GPU and get device handle
     device, gpu_handle = initialize_gpu(local_rank)
 
@@ -217,8 +255,7 @@ def train(params, args, local_rank, world_rank, world_size):
         tr_loss = loss_func(gen, tar)
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
-        val_loss = loss_func(gen, tar)
-        val_rmse = weighted_rmse(gen, tar)
+        val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
         if params.distributed:
             torch.distributed.all_reduce(
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
@@ -367,6 +404,28 @@ def train(params, args, local_rank, world_rank, world_size):
             step_count += 1
             iters += 1
 
+            if hyperparameter_search and (iters % val_freq == 0):
+                val_loss, val_rmse, _ = validate_model(
+                    model, val_data_loader, device, params,
+                    loss_func, world_rank, comm if params.distributed else None
+                )
+                
+                gpu_info = get_gpu_info(local_rank)
+                current_memory = gpu_info['used_memory'] / (1024.0 * 1024.0 * 1024.0)
+                peak_memory = max(peak_memory, current_memory)
+                
+                if val_rmse.cpu().numpy()[0] < best_val_rmse:
+                    best_val_rmse = val_rmse.cpu().numpy()[0]
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                
+                if patience_counter >= early_stop_patience:
+                    if world_rank == 0:
+                        logging.info(f"Early stopping triggered at iteration {iters}")
+                    training_time = time.time() - training_start_time
+                    return best_val_rmse, peak_memory, training_time
+
             # Check remaining time periodically
             if iters % time_check_freq == 0:
                 if world_rank == 0:
@@ -423,34 +482,10 @@ def train(params, args, local_rank, world_rank, world_size):
 
 
         val_start = time.time()
-        val_loss = torch.zeros(1, device=device)
-        val_rmse = torch.zeros(
-            (params.n_out_channels), dtype=torch.float32, device=device
+        val_loss, val_rmse, valid_steps = validate_model(
+            model, val_data_loader, device, params, 
+            loss_func, world_rank, comm if params.distributed else None
         )
-        valid_steps = 0
-        model.eval()
-
-        # Validation
-        with torch.inference_mode():
-            with torch.no_grad():
-                for i, data in enumerate(val_data_loader, 0):
-                    with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
-                        inp, tar = map(lambda x: x.to(device), data)
-                        gen = model(inp)
-                        val_loss += loss_func(gen, tar)
-                        val_rmse += weighted_rmse(gen, tar)
-                    valid_steps += 1
-
-                if params.distributed:
-                    torch.distributed.all_reduce(
-                        val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
-                    )
-                    torch.distributed.all_reduce(
-                        val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
-                    )
-
-        val_rmse /= valid_steps  # Avg validation rmse
-        val_loss /= valid_steps
         val_end = time.time()
         if world_rank == 0:
             val_iters_per_sec = valid_steps / (val_end - val_start)
@@ -472,6 +507,10 @@ def train(params, args, local_rank, world_rank, world_size):
     tottime = t2 - t1
     if NVIDIA_AVAILABLE:
         pynvml.nvmlShutdown()
+
+    if hyperparameter_search:
+        training_time = time.time() - training_start_time
+        return best_val_rmse, peak_memory, training_time
 
 def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank):
     """Save training checkpoint with model parallel support"""
