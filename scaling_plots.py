@@ -309,8 +309,11 @@ def _(mem_usage, np, plt):
         traces['fp16_local_batch_8'] = measurement * (x/512)**2
         traces['fp16_local_batch_4'] = measurement * (x/512)**2 / 2
         traces['fp16_local_batch_2'] = measurement * (x/512)**2 / 4
-        
+
+        traces['fp32_local_batch_32'] = measurement * (x/512)**2 * 2 * 4
+        traces['fp32_local_batch_16'] = measurement * (x/512)**2 * 2 * 2
         traces['fp32_local_batch_8'] = measurement * (x/512)**2 * 2
+        traces['fp32_local_batch_4'] = measurement * (x/512)**2 / 2 * 2
         traces['fp32_local_batch_2'] = measurement * (x/512)**2 / 4 * 2
         traces['fp32_local_batch_1'] = measurement * (x/512)**2 / 8 * 2
 
