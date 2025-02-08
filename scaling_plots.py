@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.10.17"
+__generated_with = "0.10.19"
 app = marimo.App(width="medium")
 
 
@@ -114,93 +114,99 @@ def _(Path, defaultdict, pl, plt, sns):
 
 @app.cell
 def _(mo):
-    mo.md("""
-    ## Flops vs Iterations
+    mo.md(
+        r"""
+        ## Flops vs Iterations
 
-    In this chinchilla papers, one way in which plots describing computation vs accuracy are created is by limiting the number of iterations the model does as a function of the desired number of Flops.
+        In this chinchilla papers, one way in which plots describing computation vs accuracy are created is by limiting the number of iterations the model does as a function of the desired number of Flops.
 
-    This is calculated as follows for a given budget $B$
+        This is calculated as follows for a given budget $B$
 
-    $\text{Sequence Length} = (x_{dim} // \text{Patch Size}) * (y_{dim} // \text{Patch Size})$
+        $\text{Sequence Length} = (x_{dim} // \text{Patch Size}) * (y_{dim} // \text{Patch Size})$
 
-    $\text{Tokens Per Step} = \text{Global Batch Size} * \text{Sequence Length}$
+        $\text{Tokens Per Step} = \text{Global Batch Size} * \text{Sequence Length}$
 
-    $\text{Max Steps} = floor(B // (6 * \text{Parameters} * \text{Tokens Per Step}))$
+        $\text{Max Steps} = floor(B // (6 * \text{Parameters} * \text{Tokens Per Step}))$
 
-    $\text{Iterations} = \text{Max Steps} // \text{Tokens Per Step}$
-    """)
+        $\text{Iterations} = \text{Max Steps} // \text{Tokens Per Step}$
+        """
+    )
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Accuracy vs Number of Attention Heads")
+    mo.md(r"""## Accuracy vs Number of Attention Heads""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Performance vs Number of Attention Heads")
+    mo.md(r"""## Performance vs Number of Attention Heads""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Accuracy/Performance vs Number of Attention Heads")
+    mo.md(r"""## Accuracy/Performance vs Number of Attention Heads""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Accuracy vs Depth")
+    mo.md(r"""## Accuracy vs Depth""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Performance vs Depth")
+    mo.md(r"""## Performance vs Depth""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Accuracy/Performance vs Depth")
+    mo.md(r"""## Accuracy/Performance vs Depth""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("""
-    ## Accuracy vs Embedding Dimension
+    mo.md(
+        r"""
+        ## Accuracy vs Embedding Dimension
 
-    The embedding dimension in a ViT model determines how well it can learn complex relationships. Patches from the spatial domain are linearly projected into the embedding dimension and are directly proportional to the weights. In this experiment, we hold constant the number of layers and heads, 8 and 12 respectively, while progressively increasing the embedding dimension by mutiples of 2, starting at 128. This shows that accuracy of the model increases as a function of embedding dimension.
-    """)
+        The embedding dimension in a ViT model determines how well it can learn complex relationships. Patches from the spatial domain are linearly projected into the embedding dimension and are directly proportional to the weights. In this experiment, we hold constant the number of layers and heads, 8 and 12 respectively, while progressively increasing the embedding dimension by mutiples of 2, starting at 128. This shows that accuracy of the model increases as a function of embedding dimension.
+        """
+    )
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Performance vs Embedding Dimension")
+    mo.md(r"""## Performance vs Embedding Dimension""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Accuracy/Performance vs Embedding Dimension")
+    mo.md(r"""## Accuracy/Performance vs Embedding Dimension""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("""
-    ### Accuracy vs Dataset Size
+    mo.md(
+        r"""
+        ### Accuracy vs Dataset Size
 
-    This experiment was run by varying the amount of data used for training vs validation. Our data consists of a downsampled version of the ERA5 dataset, which consists of multiple 4D variables (ie ones which vary across space and time). The values have a temporal resolution of 6 hours and a spatial resolution of 360 by 720 sampled on a Gaussian Grid. This is across 20 atmospheric variables. Data is further organized by year, with our set consisting of years 1990-2017. 
+        This experiment was run by varying the amount of data used for training vs validation. Our data consists of a downsampled version of the ERA5 dataset, which consists of multiple 4D variables (ie ones which vary across space and time). The values have a temporal resolution of 6 hours and a spatial resolution of 360 by 720 sampled on a Gaussian Grid. This is across 20 atmospheric variables. Data is further organized by year, with our set consisting of years 1990-2017. 
 
-    For this test, we incrementally reduce the number of years used in training while simultaneously increasing the number used for validation. We begin with 1 year for training and progressively increase this by powers of 2, with samples taken from the front of the validation dataset being moved to the training. 
+        For this test, we incrementally reduce the number of years used in training while simultaneously increasing the number used for validation. We begin with 1 year for training and progressively increase this by powers of 2, with samples taken from the front of the validation dataset being moved to the training. 
 
-    The results of this experiment show that accuracy increases as a function of the training number. This is expected, as more data should help the model learn the atmospheric conditions more effectively.
-    """)
+        The results of this experiment show that accuracy increases as a function of the training number. This is expected, as more data should help the model learn the atmospheric conditions more effectively.
+        """
+    )
     return
 
 
@@ -303,16 +309,24 @@ def _(mem_usage, np, plt):
         traces['fp16_local_batch_8'] = measurement * (x/512)**2
         traces['fp16_local_batch_4'] = measurement * (x/512)**2 / 2
         traces['fp16_local_batch_2'] = measurement * (x/512)**2 / 4
+        
+        traces['fp32_local_batch_8'] = measurement * (x/512)**2 * 2
+        traces['fp32_local_batch_2'] = measurement * (x/512)**2 / 4 * 2
+        traces['fp32_local_batch_1'] = measurement * (x/512)**2 / 8 * 2
 
-        fig, ax = plt.subplots(1, 1)
-        ax.scatter(512, measurement, label=f'measurement')
+        fig, ax = plt.subplots(1, 2, figsize=(12,5), sharey=True)
+        ax[0].scatter(512, measurement, label=f'measurement')
         for key, val in traces.items():
-            ax.plot(x, val, label=key)
-        ax.set_xlabel('Embedding Dimension')
-        ax.set_ylabel('Projected Memory Usage (GB)')
-        ax.set_title('Projected Memory Usage vs Embedding Dimension')
-        ax.axhline(y=40, color='r', linestyle='--', label='40GB GPU')
-        ax.legend()
+            if 'fp16' in key:
+                ax[0].plot(x, val, label=key)
+            elif 'fp32' in key:
+                ax[1].plot(x, val, label=key)
+        for ax_temp in ax:
+            ax_temp.set_xlabel('Embedding Dimension')
+            ax_temp.set_ylabel('Projected Memory Usage (GB)')
+            ax_temp.set_title('Projected Memory Usage vs Embedding Dimension')
+            ax_temp.axhline(y=40, color='r', linestyle='--', label='40GB GPU')
+            ax_temp.legend()
 
         # Calculate intercepts
         intercepts = {}
@@ -327,19 +341,19 @@ def _(mem_usage, np, plt):
 
 @app.cell
 def _(mo):
-    mo.md("## Accuracy vs Dtype")
+    mo.md(r"""## Accuracy vs Dtype""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Performance vs Dtype")
+    mo.md(r"""## Performance vs Dtype""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md("## Accuracy/Performance vs Dtype")
+    mo.md(r"""## Accuracy/Performance vs Dtype""")
     return
 
 
