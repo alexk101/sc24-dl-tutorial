@@ -225,7 +225,7 @@ def _(EventAccumulator, Path, defaultdict, json, np, pl):
             ts['iter'] += data[1].tolist()
 
 
-    def load_logs(target: Path):
+    def load_logs(target: Path, traces: dict):
         output_params = defaultdict(list)
         output_traces = defaultdict(list)
 
@@ -242,42 +242,78 @@ def _(EventAccumulator, Path, defaultdict, json, np, pl):
             for key, val in params.items():
                 output_params[key].append(val)
             output_params['run'].append(exp)
-
-            add_trace(ea, output_traces, 'rmse', 'RMSE(u10m)/valid', exp)
-            add_trace(ea, output_traces, 'val_loss', 'Loss/valid', exp)
-            add_trace(ea, output_traces, 'train_loss', 'Loss/train', exp)
-            add_trace(ea, output_traces, 'samples/sec', 'Avg samples per sec', exp)
+            for name, key in traces.items():
+                add_trace(ea, output_traces, name, key, exp)
         return pl.DataFrame(output_traces).join(pl.DataFrame(output_params), on='run')
     return add_trace, load_logs
 
 
 @app.cell
 def _(Path, load_logs, pl):
+    series_targets = {
+        'rmse': 'RMSE(u10m)/valid',
+        'val_loss': 'Loss/valid',
+        'train_loss': 'Loss/train',
+        'samples/sec': 'Avg samples per sec',
+        'flops/sec': 'Performance/flops_per_second',
+        'total_flops': 'Performance/total_flops'
+    }
+
     target_new_logs = Path('./scaling_logs')
     if Path('./results/exps.parquet').exists():
         exps = pl.read_parquet('./results/exps.parquet')
     else:
-        exps = load_logs(target_new_logs)
+        exps = load_logs(target_new_logs, series_targets)
         exps = exps.with_columns(pl.col('time_limit').str.to_time())
         exps = exps.cast({'run': pl.Int16})
         exps.write_parquet('./results/exps.parquet')
+    print(exps['series'].unique())
     exps
-    return exps, target_new_logs
+    return exps, series_targets, target_new_logs
 
 
 @app.cell
 def _(exps, pl, sns):
     train_data = exps.filter(pl.col('series')=='rmse').sort('time_limit')
-    g = sns.relplot(train_data.to_pandas(), x='epoch', y='value', col='time_limit', row='embed', kind='line')
+    g = sns.relplot(train_data.to_pandas(), x='epoch', y='value', col='embed', kind='line')
     g.set(ylim=(0, 1))
     return g, train_data
 
 
 @app.cell
-def _(sns, train_data):
-    g2 = sns.relplot(train_data.to_pandas(), x='iter', y='value', col='time_limit', row='embed', kind='line', hue='train_years')
+def _(exps, np, pl, sns):
+    rmse_data = exps.filter(pl.col('series')=='rmse').sort('iter', 'run')
+    flop_data = exps.filter(pl.col('series')=='total_flops').sort('iter', 'run')
+
+    # Interpolate flop_data to match rmse_data iterations
+    interpolated_flops = np.interp(
+        rmse_data['iter'], 
+        flop_data['iter'], 
+        flop_data['value'],
+    )
+
+    # Create new DataFrame with interpolated values
+    rmse_flops = pl.DataFrame().with_columns(
+        [
+            rmse_data['run'],
+            rmse_data['iter'],
+            rmse_data['value'].alias('rmse'),
+            pl.Series('flops', interpolated_flops),
+            rmse_data['embed'],  # Use embed from rmse_data since it's our target sampling rate
+            rmse_data['train_years']
+        ]
+    )
+
+    g2 = sns.relplot(rmse_flops.to_pandas(), x='flops', y='rmse', col='embed', kind='line', hue='train_years')
     g2.set(ylim=(0, 1))
-    return (g2,)
+    return flop_data, g2, interpolated_flops, rmse_data, rmse_flops
+
+
+@app.cell
+def _(rmse_flops, sns):
+    g3 = sns.relplot(rmse_flops.to_pandas(), x='flops', y='rmse', col='train_years', kind='line', hue='embed')
+    g3.set(ylim=(0, 1))
+    return (g3,)
 
 
 @app.cell
