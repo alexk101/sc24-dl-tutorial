@@ -40,7 +40,7 @@ from utils.gpu_utils import (
 
 # Check for bfloat16 support
 BFLOAT16_AVAILABLE = False
-if NVIDIA_AVAILABLE:
+if NVIDIA_AVAILABLE or ROCM_AVAILABLE:
     BFLOAT16_AVAILABLE = torch.cuda.is_bf16_supported()
     from torch.cuda.amp import autocast, GradScaler
     logging.info(f"bfloat16 support: {BFLOAT16_AVAILABLE}")
