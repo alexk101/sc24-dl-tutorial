@@ -1,5 +1,4 @@
 import torch
-import pynvml
 import logging
 
 def get_gpu_backend():
