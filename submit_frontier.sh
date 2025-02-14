@@ -29,9 +29,9 @@ cd $SLURM_SUBMIT_DIR
 
 # Reversing order of GPUs to match default CPU affinities from Slurm
 module load miniforge3/23.11.0-0
-source activate my_env
+module load rocm/6.2.4
 
 set -e
 
 source export_DDP_vars.sh
-python train_mp_mod.py ${args}
+/ccs/home/kiefera/.conda/envs/pytorch/bin/python train_mp_mod.py ${args}
