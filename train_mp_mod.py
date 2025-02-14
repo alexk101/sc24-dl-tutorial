@@ -43,15 +43,7 @@ BFLOAT16_AVAILABLE = False
 if NVIDIA_AVAILABLE:
     BFLOAT16_AVAILABLE = torch.cuda.is_bf16_supported()
     from torch.cuda.amp import autocast, GradScaler
-    logging.info(f"NVIDIA bfloat16 support: {BFLOAT16_AVAILABLE}")
-elif ROCM_AVAILABLE:
-    # Check ROCm version for bfloat16 support (available in ROCm 5.0+)
-    try:
-        BFLOAT16_AVAILABLE = torch.bfloat16 in torch.hip.get_device_properties(0).supported_dtypes
-    except:
-        BFLOAT16_AVAILABLE = False  # Fallback if can't determine
-    from torch.hip.amp import autocast, GradScaler
-    logging.info(f"AMD bfloat16 support: {BFLOAT16_AVAILABLE}")
+    logging.info(f"bfloat16 support: {BFLOAT16_AVAILABLE}")
 else:
     raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
