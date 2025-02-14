@@ -6,7 +6,9 @@
 #SBATCH -t 00:30:00
 #SBATCH --signal=B:USR1@90  # Send signal 10 minutes before time limit
 #SBATCH -o %x-%j.out
-#SBATCH --ntasks-per-node 1
+#SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=closest
 
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
@@ -34,4 +36,5 @@ module load rocm/6.2.4
 set -e
 
 source export_DDP_vars.sh
+source export_frontier_vars.sh
 /ccs/home/kiefera/.conda/envs/pytorch/bin/python train_mp_mod.py ${args}
