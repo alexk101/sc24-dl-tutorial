@@ -2,12 +2,13 @@ import os
 from pathlib import Path
 import logging
 
+DATA_DIR = os.getenv("DATADIR")
 SCRATCH = os.getenv("SCRATCH")
 TEMP_TRAIN = Path(f"{SCRATCH}/temp_train")
 TEMP_VAL = Path(f"{SCRATCH}/temp_val")
 
 def data_subset(n_train: int=25):
-    target = Path('/pscratch/sd/s/shas1693/data/sc24_tutorial_data')
+    target = Path(DATA_DIR)
     all_data = list((target/'train').iterdir())
     all_data = sorted(all_data)
     train_subset = all_data[:n_train]
