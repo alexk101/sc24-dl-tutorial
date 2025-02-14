@@ -1,12 +1,15 @@
 import torch
 import logging
+import os
+import sys
 
 def get_gpu_backend():
     """Returns the available GPU backend ('cuda' or 'rocm') or raises RuntimeError"""
     if torch.cuda.is_available():
+        # Check if we're using ROCm by looking for HIP in the PyTorch build info
+        if torch.version.hip is not None:
+            return 'rocm'
         return 'cuda'
-    elif hasattr(torch, 'hip') and torch.hip.is_available():
-        return 'rocm'
     else:
         raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
@@ -21,8 +24,12 @@ if NVIDIA_AVAILABLE:
     import pynvml
     pynvml.nvmlInit()
 elif ROCM_AVAILABLE:
+    rocm_path = os.getenv("ROCM_PATH")
+    if rocm_path is None:
+        raise RuntimeError("ROCM_PATH environment variable not set")
+    sys.path.append(f"{rocm_path}/libexec/rocm_smi/")
     from rocm_smi import rocm_smi
-    rocm_smi.initialize()
+    rocm_smi.initializeRsmi()
 
 
 def get_gpu_info(device_index):
@@ -49,20 +56,14 @@ def get_gpu_info(device_index):
 
 def initialize_gpu(local_rank):
     """Initialize GPU in a vendor-agnostic way"""
-    # Set device and benchmark mode based on available backend
-    if hasattr(torch, 'cuda') and torch.cuda.is_available():
+    if torch.cuda.is_available():  # This works for both CUDA and ROCm
         torch.backends.cudnn.benchmark = True
         torch.cuda.set_device(local_rank)
         device = torch.device(f"cuda:{local_rank}")
         if NVIDIA_AVAILABLE:
             pynvml.nvmlInit()
             handle = pynvml.nvmlDeviceGetHandleByIndex(local_rank)
-        else:
-            handle = None
-    elif hasattr(torch, 'hip') and torch.hip.is_available():
-        torch.backends.hip.benchmark = True
-        device = torch.device(f"hip:{local_rank}")
-        if ROCM_AVAILABLE:
+        elif ROCM_AVAILABLE:
             handle = local_rank  # ROCm SMI uses device index directly
         else:
             handle = None
