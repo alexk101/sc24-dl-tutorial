@@ -28,7 +28,7 @@ elif ROCM_AVAILABLE:
     if rocm_path is None:
         raise RuntimeError("ROCM_PATH environment variable not set")
     sys.path.append(f"{rocm_path}/libexec/rocm_smi/")
-    from rocm_smi import rocm_smi
+    import rocm_smi
     rocm_smi.initializeRsmi()
 
 

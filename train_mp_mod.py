@@ -37,13 +37,6 @@ from utils.gpu_utils import (
     get_gpu_info, initialize_gpu, get_profiler
 )
 
-# Import appropriate GPU monitoring tools
-if NVIDIA_AVAILABLE:
-    import pynvml
-    pynvml.nvmlInit()
-elif ROCM_AVAILABLE:
-    from rocm_smi import rocm_smi
-    rocm_smi.initialize()
 
 # Check for bfloat16 support
 BFLOAT16_AVAILABLE = False
@@ -60,10 +53,7 @@ elif ROCM_AVAILABLE:
     from torch.hip.amp import autocast, GradScaler
     logging.info(f"AMD bfloat16 support: {BFLOAT16_AVAILABLE}")
 else:
-    from torch.cpu.amp import autocast, GradScaler
-    # CPU bfloat16 support depends on hardware (e.g., Intel CPUs with AVX512-BF16)
-    BFLOAT16_AVAILABLE = hasattr(torch.cpu, 'is_bf16_supported') and torch.cpu.is_bf16_supported()
-    logging.info(f"CPU bfloat16 support: {BFLOAT16_AVAILABLE}")
+    raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
 from torch.utils.flop_counter import FlopCounterMode
 
@@ -505,9 +495,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     torch.cuda.synchronize()
     t2 = time.time()
     tottime = t2 - t1
-    if NVIDIA_AVAILABLE:
-        pynvml.nvmlShutdown()
-
     if hyperparameter_search:
         training_time = time.time() - training_start_time
         return best_val_rmse, peak_memory, training_time
