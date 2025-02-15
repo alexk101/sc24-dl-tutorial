@@ -6,7 +6,7 @@ time_limit=03:00:00
 local_batch_size=8
 
 # Arrays for parameter sweeps
-patch_sizes=(4 8 16)
+patch_sizes=(4 8 24)
 learning_rates=(1E-4 5E-4 1E-3)
 n_train_years=("10" "15" "20" "25")
 
