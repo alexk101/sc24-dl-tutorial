@@ -425,6 +425,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             # Optional: Log time and FLOP statistics
             if world_rank == 0 and iters % params.logging_freq == 0:
+                # Get validation metrics at same frequency as FLOPS
+                val_loss, val_rmse, valid_steps = validate_model(
+                    model, val_data_loader, device, params,
+                    loss_func, world_rank, comm if params.distributed else None
+                )
+                
                 total_flops += flops_per_step
                 elapsed_time = time.time() - start_time
                 remaining_time = get_remaining_time()
@@ -435,9 +441,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
                 logging.info(f"Total FLOPs: {total_flops:,}")
                 logging.info(f"FLOPS/second: {flops_per_second:,.2f}")
+                logging.info(f"Validation RMSE: {val_rmse.cpu().numpy()[0]:.4f}")
                 
                 args.tboard_writer.add_scalar('Performance/total_flops', total_flops, iters)
                 args.tboard_writer.add_scalar('Performance/flops_per_second', flops_per_second, iters)
+                args.tboard_writer.add_scalar('RMSE(u10m)/valid', val_rmse.cpu().numpy()[0], iters)
 
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
@@ -654,6 +662,12 @@ if __name__ == "__main__":
     parser.add_argument("--time_buffer", type=int, default=60, help="buffer time in seconds before SLURM time limit")
     parser.add_argument("--time_limit", type=str, default="00:30:00", help="SLURM time limit (Not used here, but logged for later analysis)")
 
+    # Add this with the other arguments
+    parser.add_argument("--learning_rate", type=float, default=None, help="Override the default learning rate")
+
+    # Add with other scaling arguments
+    parser.add_argument("--patch_size", type=int, default=None, help="Override the default patch size")
+
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
     
@@ -663,6 +677,10 @@ if __name__ == "__main__":
     params.depth = args.scale_depth
     params.num_heads = args.scale_heads
     params.n_train = args.n_train
+    if args.learning_rate is not None:
+        params.lr = args.learning_rate
+    if args.patch_size is not None:
+        params.patch_size = args.patch_size
     ########
 
     # Update config with modified args
@@ -766,6 +784,8 @@ if __name__ == "__main__":
             'n_nodes': args.n_nodes,
             'time_limit': args.time_limit,
             'local_batch_size': args.local_batch_size,
+            'learning_rate': args.learning_rate,
+            'patch_size': args.patch_size,
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
