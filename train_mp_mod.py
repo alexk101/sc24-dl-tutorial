@@ -306,6 +306,17 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         # Synchronize before proceeding
         torch.distributed.barrier()
 
+    # Add after model initialization
+    if world_rank == 0:
+        for name, group in comm.get_groups().items():
+            logging.info(f"Process group {name}: size={comm.get_size(name)}")
+            logging.info(f"Process group {name} ranks: {comm.get_ranks(name)}")
+
+        # Check specific attention block
+        block0 = model.module.blocks[0].attn
+        logging.info(f"Block 0 attention: num_heads={block0.num_heads}, num_heads_local={block0.num_heads_local}")
+        logging.info(f"Block 0 attention tp group size: {comm.get_size(block0.comm_tp_name)}")
+
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
