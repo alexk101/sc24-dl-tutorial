@@ -292,6 +292,20 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     if world_rank == 0:
         logging.info(f"FLOPs per training step: {flops_per_step:,}")
 
+    # Add after model creation (around line 171)
+    if params.distributed:
+        # Print tensor sizes for each rank
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                numel = param.numel()
+                gathered_numels = [torch.tensor([numel], device=device) for _ in range(world_size)]
+                torch.distributed.all_gather(gathered_numels, torch.tensor([numel], device=device))
+                if world_rank == 0:
+                    logging.info(f"Parameter {name} sizes across ranks: {[x.item() for x in gathered_numels]}")
+        
+        # Synchronize before proceeding
+        torch.distributed.barrier()
+
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
