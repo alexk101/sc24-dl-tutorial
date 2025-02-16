@@ -292,37 +292,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     if world_rank == 0:
         logging.info(f"FLOPs per training step: {flops_per_step:,}")
 
-    # Add after model creation (around line 171)
-    if params.distributed:
-        # Print tensor sizes for each rank
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                numel = param.numel()
-                gathered_numels = [torch.tensor([numel], device=device) for _ in range(world_size)]
-                torch.distributed.all_gather(gathered_numels, torch.tensor([numel], device=device))
-                if world_rank == 0:
-                    logging.info(f"Parameter {name} sizes across ranks: {[x.item() for x in gathered_numels]}")
-        
-        # Synchronize before proceeding
-        torch.distributed.barrier()
-
-    # Add after model initialization
-    if world_rank == 0:
-        # Get the process group sizes for each type
-        for group_name in ['tp', 'cp', 'dp', 'tp-cp']:
-            try:
-                group = comm.get_group(group_name)
-                logging.info(f"Process group {group_name}: size={comm.get_size(group_name)}")
-                logging.info(f"Process group {group_name} ranks: {comm.get_rank(group_name)}")
-            except KeyError:
-                logging.warning(f"Process group {group_name} not found")
-
-        # Check specific attention block
-        block0 = model.module.blocks[0].attn
-        logging.info(f"Block 0 attention: num_heads={block0.num_heads}, num_heads_local={block0.num_heads_local}")
-        logging.info(f"Block 0 attention tp group size: {comm.get_size(block0.comm_tp_name)}")
-        logging.info(f"tp-cp size: {comm.get_size('tp-cp')}")
-
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
@@ -456,12 +425,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             # Optional: Log time and FLOP statistics
             if world_rank == 0 and iters % params.logging_freq == 0:
-                # Get validation metrics at same frequency as FLOPS
-                val_loss, val_rmse, valid_steps = validate_model(
-                    model, val_data_loader, device, params,
-                    loss_func, world_rank, comm if params.distributed else None
-                )
-                
                 total_flops += flops_per_step
                 elapsed_time = time.time() - start_time
                 remaining_time = get_remaining_time()
@@ -472,11 +435,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
                 logging.info(f"Total FLOPs: {total_flops:,}")
                 logging.info(f"FLOPS/second: {flops_per_second:,.2f}")
-                logging.info(f"Validation RMSE: {val_rmse.cpu().numpy()[0]:.4f}")
                 
                 args.tboard_writer.add_scalar('Performance/total_flops', total_flops, iters)
                 args.tboard_writer.add_scalar('Performance/flops_per_second', flops_per_second, iters)
-                args.tboard_writer.add_scalar('RMSE(u10m)/valid', val_rmse.cpu().numpy()[0], iters)
 
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
