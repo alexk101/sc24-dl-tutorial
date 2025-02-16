@@ -308,9 +308,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # Add after model initialization
     if world_rank == 0:
-        for name, group in comm.get_group().items():
-            logging.info(f"Process group {name}: size={comm.get_size(name)}")
-            logging.info(f"Process group {name} ranks: {comm.get_ranks(name)}")
+        # Get the process group sizes for each type
+        for group_name in ['tp', 'cp', 'dp', 'tp-cp']:
+            try:
+                group = comm.get_group(group_name)
+                logging.info(f"Process group {group_name}: size={comm.get_size(group_name)}")
+                logging.info(f"Process group {group_name} ranks: {comm.get_ranks(group_name)}")
+            except KeyError:
+                logging.warning(f"Process group {group_name} not found")
 
         # Check specific attention block
         block0 = model.module.blocks[0].attn
