@@ -317,6 +317,13 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         logging.info(f"Block 0 attention: num_heads={block0.num_heads}, num_heads_local={block0.num_heads_local}")
         logging.info(f"Block 0 attention tp group size: {comm.get_size(block0.comm_tp_name)}")
 
+    # Debug process groups
+    if world_rank == 0:
+        logging.info("Process groups after initialization:")
+        for name, group in comm.get_groups().items():
+            logging.info(f"Group {name}: size={comm.get_size(name)}, ranks={comm.get_ranks(name)}")
+        logging.info(f"tp-cp size: {comm.get_size('tp-cp')}")
+
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
