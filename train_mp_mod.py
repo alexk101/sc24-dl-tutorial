@@ -313,7 +313,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             try:
                 group = comm.get_group(group_name)
                 logging.info(f"Process group {group_name}: size={comm.get_size(group_name)}")
-                logging.info(f"Process group {group_name} ranks: {comm.get_ranks(group_name)}")
+                logging.info(f"Process group {group_name} ranks: {comm.get_rank(group_name)}")
             except KeyError:
                 logging.warning(f"Process group {group_name} not found")
 
