@@ -39,11 +39,19 @@ fi
 for n_train_year in "${n_train_years[@]}"; do
     for patch_size in "${patch_sizes[@]}"; do
         for learning_rate in "${learning_rates[@]}"; do
-            sbatch --nodes ${nodes} submit_scaling.sh --config=mp --tensor_parallel=4 \
+            # Create temp script with modified time limit
+            temp_script="submit_scaling_${RANDOM}.sh"
+            sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${time_limit}/" submit_scaling.sh > "${temp_script}"
+            
+            # Submit job using temp script
+            sbatch --nodes ${nodes} "${temp_script}" --config=mp --tensor_parallel=4 \
                     --scale_depth=12 --scale_heads=8 --scale_dim=${scale_dim} \
                     --n_train=${n_train_year} --local_batch_size=${local_batch_size} \
-                    --time_limit=${time_limit} --n_nodes=${nodes} --amp_mode=none \
+                    --n_nodes=${nodes} --amp_mode=none \
                     --patch_size=${patch_size} --learning_rate=${learning_rate}
+            
+            # Clean up temp script
+            rm "${temp_script}"
         done
     done
 done
