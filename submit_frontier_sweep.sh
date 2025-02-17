@@ -25,7 +25,7 @@ mkdir -p ${LOGDIR}
 args="${@}"
 
 export HDF5_USE_FILE_LOCKING=FALSE
-export MASTER_ADDR=$(hostname)
+export MASTER_ADDR=$(hostname -i)
 cd $SLURM_SUBMIT_DIR
 
 module load miniforge3/23.11.0-0

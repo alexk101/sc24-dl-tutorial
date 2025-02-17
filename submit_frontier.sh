@@ -26,7 +26,7 @@ mkdir -p ${LOGDIR}
 args="${@}"
 
 export HDF5_USE_FILE_LOCKING=FALSE
-export MASTER_ADDR=$(hostname)
+export MASTER_ADDR=$(hostname -i)
 cd $SLURM_SUBMIT_DIR
 
 # Reversing order of GPUs to match default CPU affinities from Slurm
