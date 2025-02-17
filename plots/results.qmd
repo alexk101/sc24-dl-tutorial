@@ -1,0 +1,25 @@
+---
+title: "Scaling Results"
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
+---
+
+## Initial Scaling Results
+
+![Embedding Dimension vs Flops](./emb_flops.png)
+
+![Train Years vs Flops](./years_flops.png)
+
+
+## Problems
+
+Frontier does not seem to like 
+
+```
+2025-02-17 09:13:20,650 - root - INFO - ROCM GPU support available
+2025-02-17 09:13:20,731 - root - INFO - bfloat16 support: True
+[W217 09:13:20.845615939 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier00129.frontier.olcf.ornl.gov]:29500 (errno: 97 - Address family not supported by protocol).
+```

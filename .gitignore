@@ -166,3 +166,5 @@ scaling_logs
 stats
 archive
 old_scaling
+sweep
+*.pdf
