@@ -111,6 +111,14 @@ def init_process_group():
     master_address = os.getenv("MASTER_ADDR")
     local_rank = int(os.getenv("LOCAL_RANK", 0))
 
+    # Log distributed training parameters
+    logging.info(f"Distributed training parameters:")
+    logging.info(f"  World Size: {world_size}")
+    logging.info(f"  World Rank: {world_rank}") 
+    logging.info(f"  Master Address: {master_address}")
+    logging.info(f"  Master Port: {port}")
+    logging.info(f"  Local Rank: {local_rank}")
+
     if world_size > 1:
         with disable_logging():
             # create tcp store
