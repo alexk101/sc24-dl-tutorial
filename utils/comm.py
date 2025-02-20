@@ -108,7 +108,7 @@ def init_process_group():
     world_size = int(os.getenv("WORLD_SIZE", 1))
     world_rank = int(os.getenv("RANK", 0))
     port = int(os.getenv("MASTER_PORT", 0))
-    master_address = os.getenv("MASTER_ADDR", "0.0.0.0")
+    master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
     local_rank = int(os.getenv("LOCAL_RANK", 0))
 
     # Log distributed training parameters
