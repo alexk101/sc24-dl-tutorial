@@ -29,12 +29,17 @@ export HDF5_USE_FILE_LOCKING=FALSE
 export MASTER_ADDR=$(hostname -i)
 cd $SLURM_SUBMIT_DIR
 
-# Reversing order of GPUs to match default CPU affinities from Slurm
+module load PrgEnv-gnu/8.5.0
 module load miniforge3/23.11.0-0
 module load rocm/6.2.4
+module load craype-accel-amd-gfx90a
+
+# Location of the conda environment
+CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
+source activate ${CONDA_ENV_PATH}
 
 set -e
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
-/ccs/home/kiefera/.conda/envs/pytorch/bin/python train_mp_mod.py ${args}
+${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}

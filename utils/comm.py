@@ -108,8 +108,16 @@ def init_process_group():
     world_size = int(os.getenv("WORLD_SIZE", 1))
     world_rank = int(os.getenv("RANK", 0))
     port = int(os.getenv("MASTER_PORT", 0))
-    master_address = os.getenv("MASTER_ADDR")
+    master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
     local_rank = int(os.getenv("LOCAL_RANK", 0))
+
+    # Log distributed training parameters
+    logging.info(f"Distributed training parameters:")
+    logging.info(f"  World Size: {world_size}")
+    logging.info(f"  World Rank: {world_rank}") 
+    logging.info(f"  Master Address: {master_address}")
+    logging.info(f"  Master Port: {port}")
+    logging.info(f"  Local Rank: {local_rank}")
 
     if world_size > 1:
         with disable_logging():

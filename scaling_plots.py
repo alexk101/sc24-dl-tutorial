@@ -300,9 +300,11 @@ def _(exps, np, pl, sns):
             rmse_data['value'].alias('rmse'),
             pl.Series('flops', interpolated_flops),
             rmse_data['embed'],  # Use embed from rmse_data since it's our target sampling rate
-            rmse_data['train_years']
+            rmse_data['train_years'],
+            rmse_data['parameters']
         ]
     )
+    # rmse_flops = rmse_flops.with_columns((pl.col('flops')+pl.col('parameters')).alias('flops'))
 
     g2 = sns.relplot(rmse_flops.to_pandas(), x='flops', y='rmse', col='embed', kind='line', hue='train_years')
     g2.set(ylim=(0, 1))
@@ -317,6 +319,7 @@ def _(rmse_flops, sns):
 
 
 @app.cell
+<<<<<<< HEAD
 def _(np, pl, rmse_flops, sns):
     # After finding min_flops, add this code:
     def get_rmse_at_flops(df, target_flops):
@@ -360,6 +363,11 @@ def _(np, pl, rmse_flops, sns):
         ylabel='RMSE'
     )
     return common_rmse, g4, get_rmse_at_flops, min_flops
+=======
+def _(flop_data, pl, sns):
+    sns.barplot(flop_data.filter(pl.col('iter')==100).to_pandas(), x='embed', y='parameters')
+    return
+>>>>>>> 83d99f8c01d1487344aea95cf5fb406646b3676e
 
 
 @app.cell
