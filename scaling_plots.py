@@ -319,7 +319,6 @@ def _(rmse_flops, sns):
 
 
 @app.cell
-<<<<<<< HEAD
 def _(np, pl, rmse_flops, sns):
     # After finding min_flops, add this code:
     def get_rmse_at_flops(df, target_flops):
@@ -363,11 +362,6 @@ def _(np, pl, rmse_flops, sns):
         ylabel='RMSE'
     )
     return common_rmse, g4, get_rmse_at_flops, min_flops
-=======
-def _(flop_data, pl, sns):
-    sns.barplot(flop_data.filter(pl.col('iter')==100).to_pandas(), x='embed', y='parameters')
-    return
->>>>>>> 83d99f8c01d1487344aea95cf5fb406646b3676e
 
 
 @app.cell
