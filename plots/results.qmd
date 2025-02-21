@@ -9,10 +9,33 @@ format:
 
 ## Initial Scaling Results
 
+Below are the plots of the results from the initial scaling study. An initial comment is that they don't look as much like the plots in the paper. The primary difference is the lack of hump in the middle, which I believe corresponds to the so called "double descent" phenomenon. Though I am not sure there is an explanation for this in the literature, I think that this difference in spatio-temporal data vs language models is interesting. It may also be the case that perhaps this is due to the choice of metrics used, something which I discuss in the comments section.
+
 ![Embedding Dimension vs Flops](./emb_flops.png)
 
 ![Train Years vs Flops](./years_flops.png)
 
+From these plots, we see that as embedding dimension increases, the relative performance of the model increases
+
+![RMSE vs Embedding Dimension](./rmse_emb.png)
+
+Because the models trained have different performance, we crop the plots to the same flop-count. From this plot, we can see that the number of train years has a greater impact on the accuracy for lower embedding dimensions. 
+
+### Hypothesis
+
+Higher embedding dimensions are more effectively able to learn the problem, even with fewer train years.
+
+### Comments
+
+I think that using rmse as the metric for accuracy may not fully explain the performance of the model. Given that we are working with continuous data, I would like to see what the stdv of the predictions are. RMSE gives us the average error, but it doesn't give us any information about the spread of the errors, particularly in the spatial domain. I also think that looking at the spectral power of the errors may give us more information about the model's performance.
+
+## Future Directions
+
+I am currently running more experiments varying the patch size and learning rate of the models. They aren't finished yet, but I will update the information when they are complete.
+
+I am also not exactly sure how this might change if we greatly increase the model size. The models in the chinchilla paper are trained to much higher flops than the models in this study. However, we can see that the models we have trained already saturate at these lower flop counts. Therefore, I am not sure whether it makes sense to increase the flop count by just training longer.
+
+I also have the deephyper sweep written, but haven't successfully run it yet because of OOM errors. I am thinking of a good way to bound the parameter space to ensure that it doesn't fail.
 
 ## Problems
 

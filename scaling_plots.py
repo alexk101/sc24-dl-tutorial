@@ -317,6 +317,52 @@ def _(rmse_flops, sns):
 
 
 @app.cell
+def _(np, pl, rmse_flops, sns):
+    # After finding min_flops, add this code:
+    def get_rmse_at_flops(df, target_flops):
+        # Group by run and embed to get per-configuration interpolation
+        interpolated_rmse = []
+        for (run, embed), group in df.group_by(['run', 'embed']):
+            # Sort by flops to ensure proper interpolation
+            group = group.sort('flops')
+            # Interpolate RMSE at target flops
+            rmse_at_flops = np.interp(
+                target_flops,
+                group['flops'],
+                group['rmse']
+            )
+            interpolated_rmse.append({
+                'run': run,
+                'embed': embed,
+                'train_years': group['train_years'][0],  # Get training years for this run
+                'rmse': rmse_at_flops,
+                'flops': target_flops
+            })
+
+        return pl.DataFrame(interpolated_rmse)
+
+    min_flops = rmse_flops.group_by('run').agg(pl.col('flops').max()).sort('run')['flops'].min()
+    # Get interpolated values at min_flops
+    common_rmse = get_rmse_at_flops(rmse_flops, min_flops)
+
+    # Create visualization
+    g4 = sns.relplot(
+        common_rmse.to_pandas(), 
+        x='embed', 
+        y='rmse', 
+        hue='train_years',
+        kind='line',
+        markers=True
+    )
+    g4.set(
+        title=f'RMSE vs Embedding Dimension at {min_flops:,.0f} FLOPs',
+        xlabel='Embedding Dimension',
+        ylabel='RMSE'
+    )
+    return common_rmse, g4, get_rmse_at_flops, min_flops
+
+
+@app.cell
 def _(defaultdict, np, target_new_logs):
     mem_usage = defaultdict(list)
 
