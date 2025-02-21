@@ -3,8 +3,8 @@
 #SBATCH -J param-sweep-python
 #SBATCH -N 1
 #SBATCH -p batch
-#SBATCH -t 00:30:00
-#SBATCH --signal=B:USR1@90  # Send signal 10 minutes before time limit
+#SBATCH -t 00:05:00
+#SBATCH --signal=B:USR1@60  # Send signal 10 minutes before time limit
 #SBATCH -o %x-%j.out
 #SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
 #SBATCH --gpus-per-task=1
