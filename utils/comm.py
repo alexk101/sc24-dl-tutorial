@@ -139,8 +139,8 @@ def init_process_group():
 
         dist.init_process_group(
             backend=backend,
-            #init_method="tcp://{}:{}".format(args.master_addr, args.master_port),
-            init_method='env://',
+            init_method="tcp://{}:{}".format(master_address, port),
+            #init_method='env://',
             rank=world_rank,
             world_size=world_size,
         )
