@@ -7,3 +7,4 @@ export UCX_TLS=rc,sm,self
 export NCCL_DEBUG=INFO
 export NCCL_SOCKET_IFNAME=hsn0
 export NCCL_SOCKET_FAMILY=ipv4
+export MPICH_GPU_SUPPORT_ENABLED=1

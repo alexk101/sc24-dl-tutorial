@@ -10,7 +10,11 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=closest
 
-unset SLURM_EXPORT_ENV
+module purge
+module load PrgEnv-gnu/8.5.0
+module load miniforge3/23.11.0-0
+module load rocm/6.2.4
+module load craype-accel-amd-gfx90a
 
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
@@ -31,12 +35,6 @@ args="${@}"
 
 export HDF5_USE_FILE_LOCKING=FALSE
 cd $SLURM_SUBMIT_DIR
-
-module purge
-module load PrgEnv-gnu/8.5.0
-module load miniforge3/23.11.0-0
-module load rocm/6.2.4
-module load craype-accel-amd-gfx90a
 
 # Location of the conda environment
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
