@@ -45,12 +45,12 @@ def get_gpu_info(device_index):
             'free_memory': memory.free
         }
     elif ROCM_AVAILABLE:
-        device_info = rocm_smi.getGPUInfo(device_index)
+        (mem_used, mem_total) = rocm_smi.getMemInfo(device_index)
         return {
-            'name': device_info['name'],
-            'total_memory': device_info['total_memory'] * (1024 ** 2),  # Convert to bytes
-            'used_memory': device_info['used_memory'] * (1024 ** 2),
-            'free_memory': device_info['free_memory'] * (1024 ** 2)
+            'name': f"AMD GPU {device_index}",
+            'total_memory': mem_total * (1024 ** 2),  # Convert to bytes
+            'used_memory': mem_used * (1024 ** 2),
+            'free_memory': (mem_total - mem_used) * (1024 ** 2)
         }
 
 
