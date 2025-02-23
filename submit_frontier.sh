@@ -16,6 +16,7 @@ module load PrgEnv-gnu/8.5.0
 module load miniforge3/23.11.0-0
 module load rocm/6.2.4
 module load craype-accel-amd-gfx90a
+module load cray-hdf5-parallel/1.12.2.11
 
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
