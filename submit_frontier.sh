@@ -7,7 +7,7 @@
 #SBATCH --signal=B:USR1@60  # Send signal 10 minutes before time limit
 #SBATCH -o %x-%j.out
 #SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
-#SBATCH --ntasks=$(($8 * $SLURM_NNODES))
+#SBATCH --ntasks=$(8 * $SLURM_NNODES)
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=closest
 
