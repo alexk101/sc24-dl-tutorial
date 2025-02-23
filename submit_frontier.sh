@@ -41,8 +41,8 @@ module load craype-accel-amd-gfx90a
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 source activate ${CONDA_ENV_PATH}
 
-set -e
+set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
-${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
+srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
