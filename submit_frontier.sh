@@ -29,6 +29,7 @@ trap 'cleanup_handler' USR1
 # DATADIR=/pscratch/sd/a/akiefer/era5
 export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
 export SCRATCH=/lustre/orion/geo163/scratch/kiefera
+export MACHINE=frontier
 
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
@@ -45,4 +46,5 @@ set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
+export MASTER_PORT=3442 # default from torch launcher
 srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}

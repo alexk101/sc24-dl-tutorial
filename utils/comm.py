@@ -8,6 +8,7 @@ import numpy as np
 import torch.distributed as dist
 import datetime as dt
 from typing import Union
+from mpi4py import MPI
 
 # dummy placeholder
 _COMM_GROUPS = {}
@@ -78,7 +79,10 @@ def get_local_rank():
 
 def init(params, verbose=False):
     # init torch.distributed
-    init_process_group()
+    if os.getenv("MACHINE") == "frontier":
+        init_process_group_mpi()
+    else:
+        init_process_group_perl()
 
     # set model parallel sizes
     tp = params.get("tp", 1)
@@ -101,7 +105,7 @@ def init(params, verbose=False):
     )
 
 
-def init_process_group():
+def init_process_group_perl():
     """Initial torch distributed process group
     Uses NCCL
     """
@@ -111,7 +115,7 @@ def init_process_group():
     master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
     local_rank = int(os.getenv("LOCAL_RANK", 0))
     backend = os.getenv("DIST_BACKEND", "nccl")
-
+    
     # Log distributed training parameters
     logging.info(f"Distributed training parameters:")
     logging.info(f"  World Size: {world_size}")
@@ -121,29 +125,42 @@ def init_process_group():
     logging.info(f"  Local Rank: {local_rank}")
 
     if world_size > 1:
-        # with disable_logging():
-        # create tcp store
-        # store = dist.TCPStore(
-        #     host_name=master_address,
-        #     port=port,
-        #     world_size=world_size,
-        #     is_master=(world_rank == 0),
-        #     timeout=dt.timedelta(seconds=900),
-        # )
+        with disable_logging():
+            # create tcp store
+            store = dist.TCPStore(
+                host_name=master_address,
+                port=port,
+                world_size=world_size,
+                is_master=(world_rank == 0),
+                timeout=dt.timedelta(seconds=900),
+            )
 
-        # # initialize process groups
-        # logging.info(f"  Initializing process group with backend: {backend}")
-        # dist.init_process_group(
-        #     backend=backend, rank=world_rank, world_size=world_size, store=store
-        # )
+            # initialize process groups
+            logging.info(f"  Initializing process group with backend: {backend}")
+            dist.init_process_group(
+                backend=backend, rank=world_rank, world_size=world_size, store=store
+            )
 
-        dist.init_process_group(
-            backend=backend,
-            init_method="tcp://{}:{}".format(master_address, port),
-            #init_method='env://',
-            rank=world_rank,
-            world_size=world_size,
-        )
+
+def init_process_group_mpi():
+    """Initialize the process group using MPI"""
+    num_gpus_per_node = torch.cuda.device_count()
+    comm = MPI.COMM_WORLD
+    world_size = comm.Get_size()
+    global_rank = comm.Get_rank()
+    local_rank = int(global_rank) % int(num_gpus_per_node) 
+
+
+    if world_size > 1:
+        with disable_logging():
+            dist.init_process_group(
+                backend="nccl",
+                #init_method="tcp://{}:{}".format(args.master_addr, args.master_port),
+                init_method='env://',
+                rank=global_rank,
+                world_size=world_size,
+            )
+
 
 def init_model_parallel_info(tp=1, pp=1, dp=1, cp=1, order="tp-dp", verbose=False):
 
