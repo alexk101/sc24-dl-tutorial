@@ -45,7 +45,7 @@ def get_gpu_info(device_index):
             'free_memory': memory.free
         }
     elif ROCM_AVAILABLE:
-        (mem_used, mem_total) = rocm_smi.getMemInfo(device_index)
+        (mem_used, mem_total) = rocm_smi.getMemInfo(device_index, "vram")
         return {
             'name': f"AMD GPU {device_index}",
             'total_memory': mem_total * (1024 ** 2),  # Convert to bytes
