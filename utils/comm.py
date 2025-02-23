@@ -123,20 +123,27 @@ def init_process_group():
     if world_size > 1:
         # with disable_logging():
         # create tcp store
-        store = dist.TCPStore(
-            host_name=master_address,
-            port=port,
-            world_size=world_size,
-            is_master=(world_rank == 0),
-            timeout=dt.timedelta(seconds=900),
-        )
+        # store = dist.TCPStore(
+        #     host_name=master_address,
+        #     port=port,
+        #     world_size=world_size,
+        #     is_master=(world_rank == 0),
+        #     timeout=dt.timedelta(seconds=900),
+        # )
 
-        # initialize process groups
-        logging.info(f"  Initializing process group with backend: {backend}")
+        # # initialize process groups
+        # logging.info(f"  Initializing process group with backend: {backend}")
+        # dist.init_process_group(
+        #     backend=backend, rank=world_rank, world_size=world_size, store=store
+        # )
+
         dist.init_process_group(
-            backend=backend, rank=world_rank, world_size=world_size, store=store
+            backend=backend,
+            #init_method="tcp://{}:{}".format(args.master_addr, args.master_port),
+            init_method='env://',
+            rank=world_rank,
+            world_size=world_size,
         )
-
 
 def init_model_parallel_info(tp=1, pp=1, dp=1, cp=1, order="tp-dp", verbose=False):
 
