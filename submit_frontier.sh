@@ -6,7 +6,6 @@
 #SBATCH -t 00:05:00
 #SBATCH --signal=B:USR1@60  # Send signal 10 minutes before time limit
 #SBATCH -o %x-%j.out
-#SBATCH --cpus-per-task 16 # 64 * 2 = 128 threads / 8 GPUs = 16 threads per GPU
 #SBATCH --gpus-per-node 8
 #SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
 #SBATCH --gpus-per-task=1
