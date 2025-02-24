@@ -237,7 +237,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         tr_loss = loss_func(gen, tar)
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
+        logging.info("Prevalidation")
         val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
+        logging.info("Postvalidation")
         if params.distributed:
             torch.distributed.all_reduce(
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
@@ -248,6 +250,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             torch.distributed.all_reduce(
                 val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
             )
+        logging.info("Postreduction")
         if world_rank == 0:
             args.tboard_writer.add_scalar("Loss/train", tr_loss.item(), 0)
             args.tboard_writer.add_scalar("Loss/valid", val_loss.item(), 0)
