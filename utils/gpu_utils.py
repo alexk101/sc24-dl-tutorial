@@ -77,6 +77,4 @@ def get_profiler():
     """Returns appropriate profiling tools based on GPU backend"""
     if NVIDIA_AVAILABLE:
         return torch.cuda.nvtx
-    elif ROCM_AVAILABLE:
-        return torch.profiler
     return None
