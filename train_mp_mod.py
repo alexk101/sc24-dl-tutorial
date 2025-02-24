@@ -633,7 +633,7 @@ if __name__ == "__main__":
     parser.add_argument("--enable_jit", action="store_true", help="enable JIT compilation")
     parser.add_argument("--local_batch_size", default=None, type=int, help="local batchsize (manually override global_batch_size config setting)",)
     parser.add_argument("--num_iters", default=None, type=int, help="number of iters to run")
-    parser.add_argument("--num_data_workers", default=1, type=int, help="number of data workers for data loader",)
+    parser.add_argument("--num_data_workers", default=None, type=int, help="number of data workers for data loader",)
     parser.add_argument("--data_loader_config", default=None, type=str, choices=["pytorch", "dali"], help="dataloader configuration. choices: 'pytorch', 'dali'")
     parser.add_argument("--bucket_cap_mb", default=25, type=int, help="max message bucket size in mb")
     parser.add_argument("--disable_broadcast_buffers", action="store_true", help="disable syncing broadcasting buffers",)

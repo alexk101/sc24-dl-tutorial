@@ -59,6 +59,7 @@ class ERA5Dataset(Dataset):
 
     def _get_files_stats(self):
         self.files_paths = glob.glob(self.location + "/*.h5")
+        logging.info(f"Found {len(self.files_paths)} files in {self.location}")
         self.files_paths.sort()
         self.years = [int(os.path.splitext(os.path.basename(x))[0][-4:]) for x in self.files_paths]
         self.n_years = len(self.files_paths)
