@@ -29,6 +29,7 @@ import torch.multiprocessing
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import ReduceOp
+from torch.amp import autocast, GradScaler
 
 # GPU vendor-specific imports
 import torch
@@ -40,9 +41,11 @@ from utils.gpu_utils import (
 
 # Check for bfloat16 support
 BFLOAT16_AVAILABLE = False
+device_type = None
 if NVIDIA_AVAILABLE or ROCM_AVAILABLE:
     BFLOAT16_AVAILABLE = torch.cuda.is_bf16_supported()
-    from torch.cuda.amp import autocast, GradScaler
+    device_type = "cuda"
+    # from torch.cuda.amp import autocast, GradScaler
     logging.info(f"bfloat16 support: {BFLOAT16_AVAILABLE}")
 else:
     raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
@@ -103,7 +106,7 @@ def validate_model(model, val_loader, device, params, loss_func, world_rank, com
     with torch.inference_mode():
         with torch.no_grad():
             for i, data in enumerate(val_loader, 0):
-                with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
+                with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                     inp, tar = map(lambda x: x.to(device), data)
                     gen = model(inp)
                     val_loss += loss_func(gen, tar)
@@ -174,7 +177,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         model = torch.compile(model)
 
     if params.amp_dtype == torch.float16:
-        scaler = GradScaler()
+        scaler = GradScaler(device_type=device_type)
 
     # weight initialization needs to be synced across shared weights
     if comm.get_size("tp-cp") > 1:
@@ -280,7 +283,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     def count_training_flops(model, sample_input, loss_func):
         flop_counter = FlopCounterMode()
         with flop_counter:
-            with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
+            with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 output = model(sample_input)
                 loss = loss_func(output, sample_input)  # Using input as dummy target
             loss.backward()
@@ -344,7 +347,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             if profiler:
                 profiler.range_push(f"forward")
-            with autocast(enabled=params.amp_enabled, dtype=params.amp_dtype):
+            with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
                 loss = loss_func(gen, tar)
             if profiler:
