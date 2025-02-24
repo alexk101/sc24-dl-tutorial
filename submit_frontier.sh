@@ -17,6 +17,8 @@ module load miniforge3/23.11.0-0
 module load rocm/6.2.4
 module load craype-accel-amd-gfx90a
 module load cray-hdf5-parallel/1.12.2.11
+module load libfabric/1.22.0
+
 
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
@@ -31,6 +33,9 @@ trap 'cleanup_handler' USR1
 export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
 export SCRATCH=/lustre/orion/geo163/scratch/kiefera
 export MACHINE=frontier
+
+# RCCL
+export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRARY_PATH
 
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
