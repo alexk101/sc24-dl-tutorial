@@ -231,7 +231,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         logging.info("Starting Training Loop...")
 
     # Log initial loss on train and validation to tensorboard
+    logging.info("Preforward")
     with torch.no_grad():
+        logging.info("Postforward")
         inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
         gen = model(inp)
         tr_loss = loss_func(gen, tar)
