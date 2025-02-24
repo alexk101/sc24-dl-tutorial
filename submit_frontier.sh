@@ -36,6 +36,12 @@ export MACHINE=frontier
 # RCCL
 export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRARY_PATH
 
+# Needed to bypass MIOpen, Disk I/O Errors
+export MIOPEN_USER_DB_PATH="/tmp/my-miopen-cache"
+export MIOPEN_CUSTOM_CACHE_DIR=${MIOPEN_USER_DB_PATH}
+rm -rf ${MIOPEN_USER_DB_PATH}
+mkdir -p ${MIOPEN_USER_DB_PATH}
+
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
 args="${@}"
