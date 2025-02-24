@@ -178,9 +178,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # weight initialization needs to be synced across shared weights
     if comm.get_size("tp-cp") > 1:
+        logging.info("Init shared weights")
         init_params_for_shared_weights(model)
 
     if params.distributed and not args.noddp:
+        logging.info("Init DDP")
         model = init_ddp_model_and_reduction_hooks(model, device_ids=[local_rank],
                                                    output_device=[local_rank],
                                                    bucket_cap_mb=args.bucket_cap_mb)
@@ -196,8 +198,8 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     if world_rank == 0:
         logging.info(model)
         gpu_info = get_gpu_info(local_rank)
-        all_mem_gb = gpu_info['used_memory'] / (1024.0 * 1024.0 * 1024.0)
-        logging.info(f"Scaffolding memory high watermark: {all_mem_gb} GB.")
+        all_mem_gb = gpu_info['used_memory'] / (1024.0**3)
+        logging.info(f"Scaffolding memory high watermark: {all_mem_gb:.2f} GB.")
         with open(f'{params.experiment_dir}/hparams.json', 'r') as file:
             data = json.load(file)
         data['parameters'] = param_count
@@ -231,17 +233,13 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         logging.info("Starting Training Loop...")
 
     # Log initial loss on train and validation to tensorboard
-    logging.info("Preforward")
     with torch.no_grad():
-        logging.info("Postforward")
         inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
         gen = model(inp)
         tr_loss = loss_func(gen, tar)
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
-        logging.info("Prevalidation")
         val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
-        logging.info("Postvalidation")
         if params.distributed:
             torch.distributed.all_reduce(
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
@@ -252,7 +250,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             torch.distributed.all_reduce(
                 val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
             )
-        logging.info("Postreduction")
         if world_rank == 0:
             args.tboard_writer.add_scalar("Loss/train", tr_loss.item(), 0)
             args.tboard_writer.add_scalar("Loss/valid", val_loss.item(), 0)
