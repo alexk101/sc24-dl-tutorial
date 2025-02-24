@@ -19,7 +19,6 @@ module load craype-accel-amd-gfx90a
 module load cray-hdf5-parallel/1.12.2.11
 module load libfabric/1.22.0
 
-
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
 cleanup_handler() {
