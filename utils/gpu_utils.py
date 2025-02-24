@@ -48,9 +48,9 @@ def get_gpu_info(device_index):
         (mem_used, mem_total) = rocm_smi.getMemInfo(device_index, "vram")
         return {
             'name': f"AMD GPU {device_index}",
-            'total_memory': mem_total * (1024 ** 2),  # Convert to bytes
-            'used_memory': mem_used * (1024 ** 2),
-            'free_memory': (mem_total - mem_used) * (1024 ** 2)
+            'total_memory': mem_total,  # Convert to bytes
+            'used_memory': mem_used,
+            'free_memory': (mem_total - mem_used)
         }
 
 
