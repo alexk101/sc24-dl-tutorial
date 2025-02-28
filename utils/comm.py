@@ -132,7 +132,7 @@ def init_process_group_perl():
                 port=port,
                 world_size=world_size,
                 is_master=(world_rank == 0),
-                timeout=dt.timedelta(seconds=900),
+                timeout=dt.timedelta(seconds=60),
             )
 
             # initialize process groups

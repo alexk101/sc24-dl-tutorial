@@ -66,7 +66,7 @@ class TestDistributed(unittest.TestCase):
                 port=port,
                 world_size=cls.world_size,
                 is_master=(cls.world_rank == 0),
-                timeout=dt.timedelta(seconds=900),
+                timeout=dt.timedelta(seconds=60),
             )
 
             # initialize process groups
