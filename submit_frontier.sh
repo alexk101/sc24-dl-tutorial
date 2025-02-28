@@ -3,7 +3,7 @@
 #SBATCH -J param-sweep-python
 #SBATCH -N 1
 #SBATCH -p batch
-#SBATCH -t 00:10:00
+#SBATCH -t 00:30:00
 #SBATCH --signal=B:USR1@60  # Send signal 10 minutes before time limit
 #SBATCH -o %x-%j.out
 #SBATCH --gpus-per-node 8
