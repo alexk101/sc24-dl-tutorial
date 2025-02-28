@@ -1,0 +1,258 @@
++ source export_DDP_vars.sh
+++ export RANK=0
+++ RANK=0
+++ export LOCAL_RANK=0
+++ LOCAL_RANK=0
+++ export WORLD_SIZE=8
+++ WORLD_SIZE=8
+++ export MASTER_PORT=29500
+++ MASTER_PORT=29500
++++ hostname -i
+++ export MASTER_ADDR=10.128.23.0
+++ MASTER_ADDR=10.128.23.0
++ source export_frontier_vars.sh
+++ export NCCL_SOCKET_IFNAME=hsn0
+++ NCCL_SOCKET_IFNAME=hsn0
+++ export NCCL_SOCKET_FAMILY=ipv4
+++ NCCL_SOCKET_FAMILY=ipv4
+++ export MPICH_GPU_SUPPORT_ENABLED=1
+++ MPICH_GPU_SUPPORT_ENABLED=1
+++ export NCCL_CROSS_NIC=1
+++ NCCL_CROSS_NIC=1
++ export MASTER_PORT=3442
++ MASTER_PORT=3442
++ srun /ccs/home/kiefera/.conda/envs/pytorch/bin/python train_mp_mod.py --config=mp --tensor_parallel=8 --scale_depth=12 --scale_heads=8 --scale_dim=384 --n_train=25 --local_batch_size=16 --num_data_workers=1
+2025-02-28 08:58:46,945 - root - INFO - ROCM GPU support available
+2025-02-28 08:58:47,078 - root - INFO - bfloat16 support: True
+[W228 08:58:47.404710397 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier01467.frontier.olcf.ornl.gov]:3442 (errno: 97 - Address family not supported by protocol).
+[W228 08:58:47.404719885 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier01467.frontier.olcf.ornl.gov]:3442 (errno: 97 - Address family not supported by protocol).
+[W228 08:58:47.405725077 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier01467.frontier.olcf.ornl.gov]:3442 (errno: 97 - Address family not supported by protocol).
+[W228 08:58:47.406779364 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier01467.frontier.olcf.ornl.gov]:3442 (errno: 97 - Address family not supported by protocol).
+[W228 08:58:47.406942089 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier01467.frontier.olcf.ornl.gov]:3442 (errno: 97 - Address family not supported by protocol).
+[W228 08:58:47.408211922 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier01467.frontier.olcf.ornl.gov]:3442 (errno: 97 - Address family not supported by protocol).
+[W228 08:58:47.408438389 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier01467.frontier.olcf.ornl.gov]:3442 (errno: 97 - Address family not supported by protocol).
+[W228 08:58:47.414987131 socket.cpp:759] [c10d] The client socket cannot be initialized to connect to [frontier01467.frontier.olcf.ornl.gov]:3442 (errno: 97 - Address family not supported by protocol).
+2025-02-28 08:58:47,866 - root - INFO - Setting DP = 1, TP = 8, CP = 1, PP = 1
+2025-02-28 08:58:47,983 - root - INFO - ------------------ Configuration ------------------
+2025-02-28 08:58:47,983 - root - INFO - Configuration file: /autofs/nccs-svm1_home1/kiefera/sc24-dl-tutorial/config/ViT.yaml
+2025-02-28 08:58:47,983 - root - INFO - Configuration name: mp
+2025-02-28 08:58:47,983 - root - INFO - num_iters 500000
+2025-02-28 08:58:47,983 - root - INFO - global_batch_size 16
+2025-02-28 08:58:47,983 - root - INFO - lr 0.001
+2025-02-28 08:58:47,983 - root - INFO - num_data_workers 1
+2025-02-28 08:58:47,983 - root - INFO - embed_dim 1024
+2025-02-28 08:58:47,983 - root - INFO - data_loader_config pytorch
+2025-02-28 08:58:47,983 - root - INFO - amp_mode none
+2025-02-28 08:58:47,984 - root - INFO - enable_jit False
+2025-02-28 08:58:47,984 - root - INFO - enable_fused False
+2025-02-28 08:58:47,984 - root - INFO - depth 12
+2025-02-28 08:58:47,984 - root - INFO - dropout 0.0
+2025-02-28 08:58:47,984 - root - INFO - patch_size 8
+2025-02-28 08:58:47,984 - root - INFO - num_heads 8
+2025-02-28 08:58:47,984 - root - INFO - img_size [360, 720]
+2025-02-28 08:58:47,984 - root - INFO - dt 1
+2025-02-28 08:58:47,984 - root - INFO - expdir /logs
+2025-02-28 08:58:47,984 - root - INFO - lr_schedule cosine
+2025-02-28 08:58:47,984 - root - INFO - warmup 0
+2025-02-28 08:58:47,984 - root - INFO - optimizer Adam
+2025-02-28 08:58:47,984 - root - INFO - logging_freq 100
+2025-02-28 08:58:47,984 - root - INFO - n_in_channels 20
+2025-02-28 08:58:47,984 - root - INFO - n_out_channels 20
+2025-02-28 08:58:47,984 - root - INFO - train_data_path /data/train
+2025-02-28 08:58:47,984 - root - INFO - valid_data_path /data/valid
+2025-02-28 08:58:47,984 - root - INFO - inf_data_path /data/test
+2025-02-28 08:58:47,984 - root - INFO - time_means_path /data/stats/time_means.npy
+2025-02-28 08:58:47,984 - root - INFO - global_means_path /data/stats/global_means.npy
+2025-02-28 08:58:47,984 - root - INFO - global_stds_path /data/stats/global_stds.npy
+2025-02-28 08:58:47,984 - root - INFO - limit_nsamples None
+2025-02-28 08:58:47,984 - root - INFO - limit_nsamples_val None
+2025-02-28 08:58:47,984 - root - INFO - wireup_info env
+2025-02-28 08:58:47,984 - root - INFO - wireup_store tcp
+2025-02-28 08:58:47,984 - root - INFO - amp_enabled False
+2025-02-28 08:58:47,984 - root - INFO - amp_dtype torch.float32
+2025-02-28 08:58:47,984 - root - INFO - tp 8
+2025-02-28 08:58:47,984 - root - INFO - cp 1
+2025-02-28 08:58:47,984 - root - INFO - order tp-cp-dp
+2025-02-28 08:58:47,985 - root - INFO - ---------------------------------------------------
+2025-02-28 08:58:47,989 - root - INFO - Using AMP dtype: torch.float32
+2025-02-28 08:58:47,989 - root - INFO - rank 0, begin data loader init
+2025-02-28 08:58:48,052 - root - INFO - Found 25 files in /lustre/orion/geo163/scratch/kiefera/temp_train/25
+2025-02-28 08:58:48,052 - root - INFO - Getting file stats from /lustre/orion/geo163/scratch/kiefera/temp_train/25/1990.h5
+2025-02-28 08:58:48,053 - root - INFO - Number of samples per year: 1460
+2025-02-28 08:58:48,053 - root - INFO - Found data at path /lustre/orion/geo163/scratch/kiefera/temp_train/25. Number of examples: 36500. Image Shape: 360 x 720 x 20
+2025-02-28 08:58:48,053 - root - INFO - Found 2 files in /lustre/orion/geo163/scratch/kiefera/temp_val/25
+2025-02-28 08:58:48,054 - root - INFO - Getting file stats from /lustre/orion/geo163/scratch/kiefera/temp_val/25/2016.h5
+2025-02-28 08:58:48,054 - root - INFO - Number of samples per year: 1460
+2025-02-28 08:58:48,054 - root - INFO - Found data at path /lustre/orion/geo163/scratch/kiefera/temp_val/25. Number of examples: 2920. Image Shape: 360 x 720 x 20
+2025-02-28 08:58:48,054 - root - INFO - rank 0, data loader initialized
+2025-02-28 08:58:48,054 - root - INFO - Rank 0: Using AMD GPU 0, Total GPU memory: 63.98 GB
+2025-02-28 08:58:49,591 - root - INFO - Sanity check: Sum of ranks across nodes: 28 (Expected: 28)
+2025-02-28 08:58:49,759 - root - INFO - Init shared weights
+2025-02-28 08:58:51,048 - root - INFO - Init DDP
+2025-02-28 08:58:59,604 - root - INFO - DistributedDataParallel(
+  (module): VisionTransformer(
+    (patch_embed): PatchEmbed(
+      (proj): Conv2d(20, 384, kernel_size=(8, 8), stride=(8, 8))
+    )
+    (pos_drop): Dropout(p=0.0, inplace=False)
+    (blocks): ModuleList(
+      (0-11): 12 x Block(
+        (drop_path): Identity()
+        (attn): DistributedAttention(
+          (q): DistributedMatmul()
+          (k): DistributedMatmul()
+          (v): DistributedMatmul()
+          (attn_drop): Dropout(p=0.0, inplace=False)
+          (proj): DistributedMatmul()
+          (proj_drop): Dropout(p=0.0, inplace=False)
+        )
+        (mlp): DistributedMLP(
+          (fc1): DistributedMatmul()
+          (fc2): DistributedMatmul()
+          (act): GELU(approximate='none')
+          (drop): Dropout(p=0.0, inplace=False)
+        )
+        (norm1): DistributedLayerNorm(
+          (norm): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+        )
+        (norm2): DistributedLayerNorm(
+          (norm): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+        )
+      )
+    )
+    (norm): LayerNorm((384,), eps=1e-06, elementwise_affine=True)
+    (head): Linear(in_features=384, out_features=1280, bias=False)
+  )
+)
+2025-02-28 08:58:59,605 - root - INFO - Scaffolding memory high watermark: 2.09 GB.
+2025-02-28 08:58:59,607 - root - INFO - Starting Training Loop...
+2025-02-28 09:04:03,100 - root - INFO - Will check remaining time every 100 iterations
+2025-02-28 09:04:07,217 - root - INFO - FLOPs per training step: 3,466,777,190,400
+Module                                                          FLOP    % Total
+---------------------------------------------------------  ---------  ---------
+DistributedDataParallel                                    3466.777B    100.00%
+ - aten.convolution                                          63.701B      1.84%
+ - aten.mm                                                 1223.059B     35.28%
+ - aten._scaled_dot_product_efficient_attention             604.662B     17.44%
+ - aten._scaled_dot_product_efficient_attention_backward   1511.654B     43.60%
+ - aten.convolution_backward                                 63.701B      1.84%
+ DistributedDataParallel.module                            3466.777B    100.00%
+  - aten.convolution                                         63.701B      1.84%
+  - aten.mm                                                1223.059B     35.28%
+  - aten._scaled_dot_product_efficient_attention            604.662B     17.44%
+  - aten._scaled_dot_product_efficient_attention_backward  1511.654B     43.60%
+  - aten.convolution_backward                                63.701B      1.84%
+Module                                                          FLOP    % Total
+---------------------------------------------------------  ---------  ---------
+DistributedDataParallel                                    3466.777B    100.00%
+ - aten.convolution                                          63.701B      1.84%
+ - aten.mm                                                 1223.059B     35.28%
+ - aten._scaled_dot_product_efficient_attention             604.662B     17.44%
+ - aten._scaled_dot_product_efficient_attention_backward   1511.654B     43.60%
+ - aten.convolution_backward                                 63.701B      1.84%
+ DistributedDataParallel.module                            3466.777B    100.00%
+  - aten.convolution                                         63.701B      1.84%
+  - aten.mm                                                1223.059B     35.28%
+  - aten._scaled_dot_product_efficient_attention            604.662B     17.44%
+  - aten._scaled_dot_product_efficient_attention_backward  1511.654B     43.60%
+  - aten.convolution_backward                                63.701B      1.84%
+Module                                                          FLOP    % Total
+---------------------------------------------------------  ---------  ---------
+DistributedDataParallel                                    3466.777B    100.00%
+ - aten.convolution                                          63.701B      1.84%
+ - aten.mm                                                 1223.059B     35.28%
+ - aten._scaled_dot_product_efficient_attention             604.662B     17.44%
+ - aten._scaled_dot_product_efficient_attention_backward   1511.654B     43.60%
+ - aten.convolution_backward                                 63.701B      1.84%
+ DistributedDataParallel.module                            3466.777B    100.00%
+  - aten.convolution                                         63.701B      1.84%
+  - aten.mm                                                1223.059B     35.28%
+  - aten._scaled_dot_product_efficient_attention            604.662B     17.44%
+  - aten._scaled_dot_product_efficient_attention_backward  1511.654B     43.60%
+  - aten.convolution_backward                                63.701B      1.84%
+Module                                                          FLOP    % Total
+---------------------------------------------------------  ---------  ---------
+DistributedDataParallel                                    3466.777B    100.00%
+ - aten.convolution                                          63.701B      1.84%
+ - aten.mm                                                 1223.059B     35.28%
+ - aten._scaled_dot_product_efficient_attention             604.662B     17.44%
+ - aten._scaled_dot_product_efficient_attention_backward   1511.654B     43.60%
+ - aten.convolution_backward                                 63.701B      1.84%
+ DistributedDataParallel.module                            3466.777B    100.00%
+  - aten.convolution                                         63.701B      1.84%
+  - aten.mm                                                1223.059B     35.28%
+  - aten._scaled_dot_product_efficient_attention            604.662B     17.44%
+  - aten._scaled_dot_product_efficient_attention_backward  1511.654B     43.60%
+  - aten.convolution_backward                                63.701B      1.84%
+Module                                                          FLOP    % Total
+---------------------------------------------------------  ---------  ---------
+DistributedDataParallel                                    3466.777B    100.00%
+ - aten.convolution                                          63.701B      1.84%
+ - aten.mm                                                 1223.059B     35.28%
+ - aten._scaled_dot_product_efficient_attention             604.662B     17.44%
+ - aten._scaled_dot_product_efficient_attention_backward   1511.654B     43.60%
+ - aten.convolution_backward                                 63.701B      1.84%
+ DistributedDataParallel.module                            3466.777B    100.00%
+  - aten.convolution                                         63.701B      1.84%
+  - aten.mm                                                1223.059B     35.28%
+  - aten._scaled_dot_product_efficient_attention            604.662B     17.44%
+  - aten._scaled_dot_product_efficient_attention_backward  1511.654B     43.60%
+  - aten.convolution_backward                                63.701B      1.84%
+Module                                                          FLOP    % Total
+---------------------------------------------------------  ---------  ---------
+DistributedDataParallel                                    3466.777B    100.00%
+ - aten.convolution                                          63.701B      1.84%
+ - aten.mm                                                 1223.059B     35.28%
+ - aten._scaled_dot_product_efficient_attention             604.662B     17.44%
+ - aten._scaled_dot_product_efficient_attention_backward   1511.654B     43.60%
+ - aten.convolution_backward                                 63.701B      1.84%
+ DistributedDataParallel.module                            3466.777B    100.00%
+  - aten.convolution                                         63.701B      1.84%
+  - aten.mm                                                1223.059B     35.28%
+  - aten._scaled_dot_product_efficient_attention            604.662B     17.44%
+  - aten._scaled_dot_product_efficient_attention_backward  1511.654B     43.60%
+  - aten.convolution_backward                                63.701B      1.84%
+Module                                                          FLOP    % Total
+---------------------------------------------------------  ---------  ---------
+DistributedDataParallel                                    3466.777B    100.00%
+ - aten.convolution                                          63.701B      1.84%
+ - aten.mm                                                 1223.059B     35.28%
+ - aten._scaled_dot_product_efficient_attention             604.662B     17.44%
+ - aten._scaled_dot_product_efficient_attention_backward   1511.654B     43.60%
+ - aten.convolution_backward                                 63.701B      1.84%
+ DistributedDataParallel.module                            3466.777B    100.00%
+  - aten.convolution                                         63.701B      1.84%
+  - aten.mm                                                1223.059B     35.28%
+  - aten._scaled_dot_product_efficient_attention            604.662B     17.44%
+  - aten._scaled_dot_product_efficient_attention_backward  1511.654B     43.60%
+  - aten.convolution_backward                                63.701B      1.84%
+Module                                                          FLOP    % Total
+---------------------------------------------------------  ---------  ---------
+DistributedDataParallel                                    3466.777B    100.00%
+ - aten.convolution                                          63.701B      1.84%
+ - aten.mm                                                 1223.059B     35.28%
+ - aten._scaled_dot_product_efficient_attention             604.662B     17.44%
+ - aten._scaled_dot_product_efficient_attention_backward   1511.654B     43.60%
+ - aten.convolution_backward                                 63.701B      1.84%
+ DistributedDataParallel.module                            3466.777B    100.00%
+  - aten.convolution                                         63.701B      1.84%
+  - aten.mm                                                1223.059B     35.28%
+  - aten._scaled_dot_product_efficient_attention            604.662B     17.44%
+  - aten._scaled_dot_product_efficient_attention_backward  1511.654B     43.60%
+  - aten.convolution_backward                                63.701B      1.84%
+2025-02-28 09:04:12,756 - root - INFO -  Memory usage after forward pass: 14.321022033691406 GB.
+2025-02-28 09:08:05,495 - root - INFO - Time elapsed: 242.40s, Remaining: 0.34h
+2025-02-28 09:08:05,496 - root - INFO - Current iteration: 100/500000 (0.0%)
+2025-02-28 09:11:51,193 - root - INFO - Time elapsed: 468.09s, Remaining: 0.28h
+2025-02-28 09:11:51,194 - root - INFO - Current iteration: 200/500000 (0.0%)
+2025-02-28 09:15:29,282 - root - INFO - Time elapsed: 686.18s, Remaining: 0.22h
+2025-02-28 09:15:29,297 - root - INFO - Current iteration: 300/500000 (0.1%)
+2025-02-28 09:19:09,564 - root - INFO - Time elapsed: 906.46s, Remaining: 0.15h
+2025-02-28 09:19:09,565 - root - INFO - Current iteration: 400/500000 (0.1%)
+2025-02-28 09:22:49,448 - root - INFO - Time elapsed: 1126.35s, Remaining: 0.09h
+2025-02-28 09:22:49,448 - root - INFO - Current iteration: 500/500000 (0.1%)
+2025-02-28 09:26:16,824 - root - INFO - Time elapsed: 1333.72s, Remaining: 0.04h
+2025-02-28 09:26:16,824 - root - INFO - Current iteration: 600/500000 (0.1%)
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** STEP 3109071.0 ON frontier01467 CANCELLED AT 2025-02-28T09:28:32 DUE TO TIME LIMIT ***
+slurmstepd: error: *** JOB 3109071 ON frontier01467 CANCELLED AT 2025-02-28T09:28:32 DUE TO TIME LIMIT ***
