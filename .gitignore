@@ -168,3 +168,4 @@ archive
 old_scaling
 sweep
 *.pdf
+*.out

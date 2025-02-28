@@ -118,7 +118,8 @@ mp: &mp
   lr: 1e-3
   num_data_workers: 8
   embed_dim: 1024 # change to bigger model
-  data_loader_config: 'dali'
+  # data_loader_config: 'dali'
+  data_loader_config: 'pytorch'
   amp_mode: fp16
   enable_jit: true
   enable_fused: true

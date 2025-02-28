@@ -9,6 +9,8 @@ from torch.utils.data.distributed import DistributedSampler
 from torch import Tensor
 import h5py
 
+DATA_DIR = os.getenv("DATADIR")
+
 def worker_init(wrk_id):
     np.random.seed(torch.utils.data.get_worker_info().seed%(2**32 - 1))
 
@@ -50,13 +52,14 @@ class ERA5Dataset(Dataset):
         self.n_in_channels = params.n_in_channels
         self.n_out_channels = params.n_out_channels
         self.normalize = True
-        self.means = np.load(params.global_means_path)[0]
-        self.stds = np.load(params.global_stds_path)[0]
+        self.means = np.load(f'{DATA_DIR}/stats/global_means.npy')[0]
+        self.stds = np.load(f'{DATA_DIR}/stats/global_stds.npy')[0]
         self.limit_nsamples = params.limit_nsamples if train else params.limit_nsamples_val
         self._get_files_stats()
 
     def _get_files_stats(self):
         self.files_paths = glob.glob(self.location + "/*.h5")
+        logging.info(f"Found {len(self.files_paths)} files in {self.location}")
         self.files_paths.sort()
         self.years = [int(os.path.splitext(os.path.basename(x))[0][-4:]) for x in self.files_paths]
         self.n_years = len(self.files_paths)
