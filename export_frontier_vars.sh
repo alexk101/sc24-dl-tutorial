@@ -8,7 +8,7 @@ export PMI_NO_FORK=1
 export NCCL_IB_HCA=hsn0
 
 # Add these to isolate NCCL communication between jobs
-export NCCL_COMM_ID=$(uuidgen)  # Generate unique ID for each job
+export NCCL_COMM_ID="${SLURM_JOB_ID:-$(date +%s)}"  # Use SLURM job ID or timestamp
 export NCCL_SOCKET_NTHREADS=1   # Reduce connection threads
 export NCCL_ASYNC_ERROR_HANDLING=1
 export NCCL_P2P_DISABLE=0
