@@ -9,7 +9,7 @@ export PMI_NO_FORK=1
 export NCCL_IB_HCA=hsn0
 
 # Alternative approach to isolate NCCL communications
-export NCCL_BLOCKING_WAIT=1
+export TORCH_NCCL_BLOCKING_WAIT=1
 export NCCL_IB_DISABLE=0
 export NCCL_SOCKET_NTHREADS=1
 
