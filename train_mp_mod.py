@@ -319,15 +319,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 
             if world_rank == 0:
                 if epoch == 3 and i == 0:
-                    if NVIDIA_AVAILABLE:
-                        torch.cuda.profiler.start()
-                    elif ROCM_AVAILABLE:
-                        torch.profiler.start()
+                    torch.cuda.profiler.start()
                 if epoch == 3 and i == len(train_data_loader) - 1:
-                    if NVIDIA_AVAILABLE:
-                        torch.cuda.profiler.stop()
-                    elif ROCM_AVAILABLE:
-                        torch.profiler.stop()
+                    torch.cuda.profiler.stop()
 
             if profiler:
                 profiler.range_push(f"step {i}")
