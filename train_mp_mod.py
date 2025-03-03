@@ -12,7 +12,7 @@ from utils.YParams import YParams
 from utils import get_data_loader_distributed
 from utils import comm
 from utils.loss import l2_loss, l2_loss_opt
-from utils.metrics import weighted_rmse
+from utils.metrics import weighted_rmse, time_communication, backward_with_comm_timing
 from utils.data import data_subset, clean_up_temp_dirs, TEMP_TRAIN, TEMP_VAL, SCRATCH
 from networks import vit
 
@@ -367,12 +367,13 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     profiler.range_pop()  # optimizer
                 scaler.update()
             else:
-                loss.backward()
-                if profiler:
-                    profiler.range_push(f"optimizer")
-                optimizer.step()
-                if profiler:
-                    profiler.range_pop()  # optimizer
+                # Replace with timing instrumentation
+                timing_stats = backward_with_comm_timing(loss, optimizer)
+                if world_rank == 0 and iters % params.logging_freq == 0:
+                    logging.info(f"Backward timing: compute={timing_stats['backward_compute_time']:.4f}s, "
+                                 f"comm={timing_stats['comm_time']:.4f}s, "
+                                 f"ratio={timing_stats['comm_ratio']:.2%}")
+                    args.tboard_writer.add_scalar("Performance/comm_ratio", timing_stats["comm_ratio"], iters)
 
             if params.distributed:
                 torch.distributed.all_reduce(
@@ -436,6 +437,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
                 logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
                 
+            if iters % 100 == 0:  # Every 100 iterations
+                comm_stats = time_communication(comm, device)
+                if world_rank == 0:
+                    logging.info(f"Communication stats: {comm_stats}")
+                    args.tboard_writer.add_scalar("Comm/all_reduce_time_ms", comm_stats["all_reduce_time_ms"], iters)
+                    args.tboard_writer.add_scalar("Comm/broadcast_time_ms", comm_stats["broadcast_time_ms"], iters)
 
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
