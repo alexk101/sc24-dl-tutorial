@@ -50,14 +50,21 @@ def time_communication(comm, device):
     # Time all-reduce (used in gradient synchronization)
     torch.cuda.synchronize()
     start = time.time()
-    torch.distributed.all_reduce(dummy_tensor, group=comm.get_group("dp"))
+    if comm.is_initialized("dp"):
+        torch.distributed.all_reduce(dummy_tensor, group=comm.get_group("dp"))
     torch.cuda.synchronize()
     all_reduce_time = time.time() - start
     
     # Time broadcast (used in parameter synchronization)
     torch.cuda.synchronize()
     start = time.time()
-    torch.distributed.broadcast(dummy_tensor, 0, group=comm.get_group("tp"))
+    if comm.is_initialized("tp"):
+        # Only perform broadcast if this rank is part of the TP group
+        try:
+            torch.distributed.broadcast(dummy_tensor, 0, group=comm.get_group("tp"))
+        except ValueError:
+            # If this rank is not part of the TP group, skip the broadcast
+            pass
     torch.cuda.synchronize()
     broadcast_time = time.time() - start
     
