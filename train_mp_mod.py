@@ -19,7 +19,7 @@ from networks import vit
 from distributed.mappings import init_ddp_model_and_reduction_hooks
 from distributed.helpers import init_params_for_shared_weights
 
-from utils.plots import generate_images
+from utils.plots import generate_images, calculate_layerwise_stdv, save_stdv_values, log_stdv_image
 from pathlib import Path
 import json
 
@@ -480,6 +480,40 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
             )
+            
+            # Add this section to calculate and log standard deviation of the error
+            with torch.no_grad():
+                # Get a batch of validation data
+                inp_val, tar_val = next(iter(val_data_loader))
+                inp_val, tar_val = inp_val.to(device), tar_val.to(device)
+                
+                # Generate predictions
+                with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
+                    gen_val = model(inp_val)
+                
+                # Calculate the error (prediction - target)
+                error = gen_val - tar_val
+                
+                # Calculate layer-wise standard deviation of the error
+                error_stdv = calculate_layerwise_stdv(error, tag="error_stdv")
+                
+                # Save the raw error stdv values for post-processing
+                save_dir = os.path.join(params.experiment_dir, "error_stdv_values")
+                save_stdv_values(error_stdv, save_dir, iters, "error_stdv")
+                
+                # Log the average standard deviation of error as an image
+                log_stdv_image(error_stdv, args.tboard_writer, global_step=iters, tag="error_stdv_image", save_dir=save_dir)
+                
+                # Optionally, also calculate the absolute error and its standard deviation
+                abs_error = torch.abs(error)
+                abs_error_stdv = calculate_layerwise_stdv(abs_error, tag="abs_error_stdv")
+                log_stdv_image(abs_error_stdv, args.tboard_writer, global_step=iters, tag="abs_error_stdv_image", save_dir=save_dir)
+                
+                # Calculate squared error and its standard deviation (related to variance)
+                squared_error = error ** 2
+                squared_error_stdv = calculate_layerwise_stdv(squared_error, tag="squared_error_stdv")
+                log_stdv_image(squared_error_stdv, args.tboard_writer, global_step=iters, tag="squared_error_stdv_image", save_dir=save_dir)
+            
             total_flops += flops_per_step
             flops_per_second = total_flops / elapsed_time
             logging.info(f"Total FLOPs: {total_flops:,}")
