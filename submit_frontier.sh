@@ -43,7 +43,6 @@ export HDF5_USE_FILE_LOCKING=FALSE
 
 # Location of the conda environment
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
-source activate ${CONDA_ENV_PATH}
 
 # Command line arguments
 args="${@}"

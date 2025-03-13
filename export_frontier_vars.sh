@@ -11,6 +11,10 @@ if [ "$ENABLE_AWS_OFI_RCCL_PLUGIN" -eq 1 ]; then
 fi
 export MIOPEN_DISABLE_CACHE=1
 
+export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
+export HIP_VISIBLE_DEVICES=$SLURM_LOCALID
+export ROCR_VISIBLE_DEVICES=$SLURM_LOCALID
+
 export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
 export SCRATCH=/lustre/orion/geo163/scratch/kiefera
 export MACHINE=frontier
