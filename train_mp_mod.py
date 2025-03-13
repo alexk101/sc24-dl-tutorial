@@ -1,4 +1,5 @@
-import env_setup
+from utils import logging_utils
+logging_utils.config_logger()
 import sys
 import os
 import logging
