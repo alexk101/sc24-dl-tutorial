@@ -6,6 +6,8 @@ import subprocess
 
 def get_gpu_backend():
     """Determine which GPU backend is available (CUDA or ROCm)"""
+    logging.info(f"HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
+    logging.info(f"ROCR_VISIBLE_DEVICES={os.environ.get('ROCR_VISIBLE_DEVICES')}")
     # First check if we're on Frontier
     if os.getenv("MACHINE") == "frontier":
         # On Frontier, we know we have ROCm GPUs
@@ -38,6 +40,7 @@ elif ROCM_AVAILABLE:
     sys.path.append(f"{rocm_path}/libexec/rocm_smi/")
     import rocm_smi
     rocm_smi.initializeRsmi()
+
 
 
 def log_rocm_utilization():
