@@ -820,6 +820,8 @@ if __name__ == "__main__":
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
 
+    logging.info(f"Rank {world_rank}: MASTER_PORT={os.environ.get('MASTER_PORT')}, MASTER_ADDR={os.environ.get('MASTER_ADDR')}")
+
     train(params, args, local_rank, world_rank, world_size)
     
     if params.distributed:
