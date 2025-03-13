@@ -47,9 +47,13 @@ cd $SLURM_SUBMIT_DIR
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 source activate ${CONDA_ENV_PATH}
 
+source export_DDP_vars.sh 
+source export_frontier_vars.sh
+
 set -x
 srun  \
     bash -c "
-    source export_DDP_vars.sh export_frontier_vars.sh
+    source export_DDP_vars.sh
+    source export_frontier_vars.sh
     ${PROFILE_CMD} ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
     "
