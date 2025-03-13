@@ -77,5 +77,5 @@ set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
-srun --ntasks-per-node=8 --gpus-per-node=8 \
+srun --ntasks-per-node=8 --gpus-per-node=8 --ntasks=$((SLURM_NNODES*8)) \
     ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
