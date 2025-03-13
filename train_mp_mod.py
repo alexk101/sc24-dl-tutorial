@@ -667,6 +667,7 @@ def load_checkpoint(model, optimizer, scheduler, params, args, world_rank, local
         return 0
 
 if __name__ == "__main__":
+    logging.info(f"MACHINE={os.getenv('MACHINE')}")
     if os.getenv("MACHINE") == "frontier":
         os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
         os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
