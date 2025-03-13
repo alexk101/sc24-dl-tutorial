@@ -28,7 +28,7 @@ import torch.optim as optim
 import torch.multiprocessing
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
-from torch.distributed import ReduceOp
+from torch.distributed import ReduceOp, destroy_process_group
 from torch.amp import autocast, GradScaler
 
 # GPU vendor-specific imports
@@ -89,6 +89,7 @@ def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
             logging.info("Time limit approaching - saved checkpoint and exiting")
         if params.distributed:
             torch.distributed.barrier()  # Ensure all processes finish saving
+            destroy_process_group(None)
         sys.exit(0)
     except Exception as e:
         logging.error(f"Error during save_and_exit: {e}")
