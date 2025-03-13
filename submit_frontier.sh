@@ -6,7 +6,6 @@
 #SBATCH -t 00:30:00
 #SBATCH --signal=B:USR1@60  # Send signal 10 minutes before time limit
 #SBATCH -o %x-%j.out
-#SBATCH --cpus-per-node 128
 #SBATCH --gpus-per-node 8
 #SBATCH --ntasks-per-node 8  # Changed from 1 to 8 for MI250X GPUs
 #SBATCH --gpus-per-task=1
@@ -79,6 +78,5 @@ set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
-srun --ntasks=16 --ntasks-per-node=8 --gpus-per-node=8 \\
-    --gpu-bind=closest --cpus-per-node=128\\
+srun --ntasks=16 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest\\
     ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
