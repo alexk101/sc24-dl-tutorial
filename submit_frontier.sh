@@ -55,6 +55,7 @@ srun --export=ALL \
     export CUDA_VISIBLE_DEVICES=\$SLURM_LOCALID
     export HIP_VISIBLE_DEVICES=\$SLURM_LOCALID
     export ROCR_VISIBLE_DEVICES=\$SLURM_LOCALID
+    echo \"ROCM_PATH RANK=\$RANK: \$ROCM_PATH\"
     
     # Source DDP and Frontier-specific variables
     source export_DDP_vars.sh
