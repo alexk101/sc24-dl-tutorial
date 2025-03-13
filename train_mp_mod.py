@@ -1,4 +1,5 @@
 import logging
+import os
 if os.getenv("MACHINE") == "frontier":
     # Let SLURM set the GPU assignment
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
@@ -10,7 +11,6 @@ if os.getenv("MACHINE") == "frontier":
 from utils import logging_utils
 logging_utils.config_logger()
 import sys
-import os
 import time
 import numpy as np
 import argparse
