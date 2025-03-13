@@ -5,9 +5,6 @@
 #SBATCH -t 00:10:00
 #SBATCH -p batch
 #SBATCH -N 2
-#SBATCH --ntasks=16
-#SBATCH --ntasks-per-node=8
-#SBATCH --gpus-per-task=1
 
 unset SLURM_EXPORT_ENV
 
