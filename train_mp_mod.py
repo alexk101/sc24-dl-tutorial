@@ -8,6 +8,13 @@ import numpy as np
 import argparse
 from utils.YParams import YParams
 
+if os.getenv("MACHINE") == "frontier":
+    # Let SLURM set the GPU assignment
+    os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+    # For ROCm
+    os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+    os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+
 # Now import the rest of the modules
 from utils import get_data_loader_distributed
 from utils import comm
