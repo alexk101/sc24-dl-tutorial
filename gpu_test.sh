@@ -49,4 +49,13 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 args="${@}"
 
 # Run with srun directly - no bash -c wrapper
-srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpus-per-task=1 ${CONDA_ENV_PATH}/bin/python test_gpu.py
+srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpus-per-task=1 \
+    bash -c "
+    # Set GPU visibility for this task - IMPORTANT: Set to the same single value
+    export CUDA_VISIBLE_DEVICES=\$SLURM_LOCALID
+    export HIP_VISIBLE_DEVICES=\$SLURM_LOCALID
+    export ROCR_VISIBLE_DEVICES=\$SLURM_LOCALID
+    
+    # Run the Python script
+    ${CONDA_ENV_PATH}/bin/python test_gpu.py
+    "
