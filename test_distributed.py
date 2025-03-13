@@ -31,9 +31,9 @@ class RankLogger:
 def main():
     # Get environment variables
     try:
-        rank = int(os.environ["RANK"])
-        local_rank = int(os.environ["LOCAL_RANK"])
-        world_size = int(os.environ["WORLD_SIZE"])
+        rank = int(os.environ["SLURM_PROCID"])
+        local_rank = int(os.environ["SLURM_LOCALID"])
+        world_size = int(os.environ["SLURM_NTASKS"])
         master_addr = os.environ["MASTER_ADDR"]
         master_port = os.environ["MASTER_PORT"]
     except KeyError as e:
