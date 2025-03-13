@@ -68,7 +68,7 @@ def initialize_gpu(local_rank):
     """Initialize GPU in a vendor-agnostic way"""
     if torch.cuda.is_available():  # This works for both CUDA and ROCm
         torch.backends.cudnn.benchmark = True
-        logging.info(f"Attaching GPU {local_rank} on device {device}")
+        logging.info(f"Attaching GPU {local_rank}")
         torch.cuda.set_device(local_rank)
         device = torch.device(f"cuda:{local_rank}")
         logging.info(f"Initialized GPU {local_rank} on device {device}")
