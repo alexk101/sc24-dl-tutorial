@@ -29,11 +29,11 @@ class RankLogger:
     def error(self, msg):
         self.logger.error(msg, extra={'rank': self.rank})
 
-# # Let SLURM set the GPU assignment
-# os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-# # For ROCm
-# os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-# os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+# Let SLURM set the GPU assignment
+os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+# For ROCm
+os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
 
 def main():
     # Get environment variables
