@@ -52,4 +52,4 @@ args="${@}"
 # Run with srun directly - no bash -c wrapper
 # IMPORTANT: Do NOT set CUDA_VISIBLE_DEVICES, HIP_VISIBLE_DEVICES, or ROCR_VISIBLE_DEVICES
 # to allow all processes to see all GPUs
-srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpus-per-task=1 ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
+srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
