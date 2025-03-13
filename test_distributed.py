@@ -46,7 +46,11 @@ def main():
     # Log environment variables
     log.info(f"Environment: RANK={rank}, LOCAL_RANK={local_rank}, WORLD_SIZE={world_size}")
     log.info(f"Environment: MASTER_ADDR={master_addr}, MASTER_PORT={master_port}")
-    
+    log.info(f"Node: {os.environ.get('SLURMD_NODENAME')}, "
+        f"SLURM_PROCID: {os.environ.get('SLURM_PROCID')}, "
+        f"SLURM_LOCALID: {os.environ.get('SLURM_LOCALID')}, "
+        f"SLURM_NODEID: {os.environ.get('SLURM_NODEID')}")
+
     # Initialize process group
     log.info("Initializing process group")
     try:
