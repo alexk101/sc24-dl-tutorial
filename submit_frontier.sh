@@ -38,6 +38,8 @@ done
 # Set up environment variables
 export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
 export SCRATCH=/lustre/orion/geo163/scratch/kiefera
+LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
+mkdir -p ${LOGDIR}
 export MACHINE=frontier
 export HDF5_USE_FILE_LOCKING=FALSE
 
@@ -47,20 +49,20 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 # Command line arguments
 args="${@}"
 
-# Set GPU visibility for this task
-export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
-export HIP_VISIBLE_DEVICES=$SLURM_LOCALID
-export ROCR_VISIBLE_DEVICES=$SLURM_LOCALID
-
-# Source DDP and Frontier-specific variables
-source export_DDP_vars.sh
-source export_frontier_vars.sh
-echo "ROCM_PATH RANK=$RANK: $ROCM_PATH"
-
+export MASTER_ADDR=$(hostname -i)
 # Run with srun, sourcing environment variables inside each task
 set -x
 srun --export=ALL \
     bash -c "
+    # Set GPU visibility for this task
+    export CUDA_VISIBLE_DEVICES=\$SLURM_LOCALID
+    export HIP_VISIBLE_DEVICES=\$SLURM_LOCALID
+    export ROCR_VISIBLE_DEVICES=\$SLURM_LOCALID
+    
+    # Source DDP and Frontier-specific variables
+    source export_DDP_vars.sh
+    source export_frontier_vars.sh
+    echo \"ROCM_PATH RANK=\$RANK: \$ROCM_PATH\"
     
     # Print debug info
     echo \"Task \$SLURM_PROCID: RANK=\$RANK, LOCAL_RANK=\$LOCAL_RANK, HIP_VISIBLE_DEVICES=\$HIP_VISIBLE_DEVICES\"

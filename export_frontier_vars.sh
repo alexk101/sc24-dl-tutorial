@@ -11,27 +11,21 @@ if [ "$ENABLE_AWS_OFI_RCCL_PLUGIN" -eq 1 ]; then
 fi
 export MIOPEN_DISABLE_CACHE=1
 
-export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
-export HIP_VISIBLE_DEVICES=$SLURM_LOCALID
-export ROCR_VISIBLE_DEVICES=$SLURM_LOCALID
-
 export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
 export SCRATCH=/lustre/orion/geo163/scratch/kiefera
 export MACHINE=frontier
-LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
-mkdir -p ${LOGDIR}
 
 # Add these environment variables before source export_DDP_vars.sh
 # export NCCL_DEBUG=INFO # For debugging network issues
 # export NCCL_DEBUG=WARN # For debugging network issues, less verbose
-export NCCL_SOCKET_IFNAME=hsn0
-export NCCL_SOCKET_FAMILY=ipv4
 
 # Use job-specific temporary directory for NCCL
 export NCCL_TEMP_DIR="/tmp/nccl-${SLURM_JOB_ID}"
 mkdir -p $NCCL_TEMP_DIR
 
 # NCCL performance tuning for Frontier
+export NCCL_SOCKET_IFNAME=hsn0
+export NCCL_SOCKET_FAMILY=ipv4
 export NCCL_DMABUF_ENABLE=1
 export NCCL_NET_GDR_LEVEL=3
 export NCCL_ALGO=Tree

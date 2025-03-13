@@ -5,10 +5,10 @@ from utils.rank_generator import RankGenerator
 import torch
 import math
 import numpy as np
+from mpi4py import MPI
 import torch.distributed as dist
 import datetime as dt
 from typing import Union
-from mpi4py import MPI
 
 # dummy placeholder
 _COMM_GROUPS = {}
