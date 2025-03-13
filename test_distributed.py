@@ -5,6 +5,7 @@ import time
 import torch
 import torch.distributed as dist
 import logging
+from mpi4py import MPI
 
 # Configure logging
 logging.basicConfig(
@@ -37,11 +38,12 @@ os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
 def main():
     # Get environment variables
     try:
-        rank = int(os.environ["SLURM_PROCID"])
-        local_rank = int(os.environ["SLURM_LOCALID"])
-        world_size = int(os.environ["SLURM_NTASKS"])
-        master_addr = os.environ["MASTER_ADDR"]
-        master_port = os.environ["MASTER_PORT"]
+        num_gpus_per_node = torch.cuda.device_count()
+        comm = MPI.COMM_WORLD
+        world_size = comm.Get_size()
+        global_rank = rank = comm.Get_rank()
+        local_rank = int(rank) % int(num_gpus_per_node) # local_rank and device are 0 when using 1 GPU per task
+
     except KeyError as e:
         print(f"Missing environment variable: {e}")
         sys.exit(1)
