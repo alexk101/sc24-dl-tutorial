@@ -52,7 +52,7 @@ args="${@}"
 export MASTER_ADDR=$(hostname -i)
 # Run with srun, sourcing environment variables inside each task
 set -x
-srun --export=ALL \
+srun --export=ALL --ntasks=16 --ntasks-per-node=8 --gpus-per-node=8 \
     bash -c "
     # Set GPU visibility for this task
     export CUDA_VISIBLE_DEVICES=\$SLURM_LOCALID
