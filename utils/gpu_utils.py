@@ -2,6 +2,7 @@ import torch
 import logging
 import os
 import sys
+import subprocess
 
 def get_gpu_backend():
     """Returns the available GPU backend ('cuda' or 'rocm') or raises RuntimeError"""
@@ -30,6 +31,15 @@ elif ROCM_AVAILABLE:
     sys.path.append(f"{rocm_path}/libexec/rocm_smi/")
     import rocm_smi
     rocm_smi.initializeRsmi()
+
+
+def log_rocm_utilization():
+    """Log ROCM utilization"""
+    rocm_smi = os.environ['ROCM_PATH'] + '/bin/rocm-smi'
+    result = subprocess.run([rocm_smi], capture_output=True, text=True)
+    if result.returncode == 0:
+        utilization_info = result.stdout
+        logging.info(f"ROCM Utilization: {utilization_info}")
 
 
 def get_gpu_info(device_index):

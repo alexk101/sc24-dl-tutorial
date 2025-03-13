@@ -35,7 +35,7 @@ from torch.amp import autocast, GradScaler
 import torch
 from utils.gpu_utils import (
     NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND, 
-    get_gpu_info, initialize_gpu, get_profiler
+    get_gpu_info, initialize_gpu, get_profiler, log_rocm_utilization
 )
 
 
@@ -425,19 +425,18 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
 
             # Optional: Log time and FLOP statistics
-            if world_rank == 0 and iters % params.logging_freq == 0:
-                elapsed_time = time.time() - start_time
-                remaining_time = get_remaining_time()
-                hours_remaining = remaining_time / 3600
-                logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
-                logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
-                
-            if iters % 100 == 0:  # Every 100 iterations
+            if iters % params.logging_freq == 0:
                 comm_stats = time_communication(comm, device)
                 if world_rank == 0:
                     logging.info(f"Communication stats: {comm_stats}")
                     args.tboard_writer.add_scalar("Comm/all_reduce_time_ms", comm_stats["all_reduce_time_ms"], iters)
                     args.tboard_writer.add_scalar("Comm/broadcast_time_ms", comm_stats["broadcast_time_ms"], iters)
+                    elapsed_time = time.time() - start_time
+                    remaining_time = get_remaining_time()
+                    hours_remaining = remaining_time / 3600
+                    logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
+                    logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
+                    
 
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
@@ -461,6 +460,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             args.tboard_writer.add_scalar("Avg samples per sec", samples_per_sec, iters)
             fig = generate_images([inp, tar, gen])
             args.tboard_writer.add_figure("Visualization, t2m", fig, iters, close=True)
+            log_rocm_utilization()
 
 
         val_start = time.time()
@@ -503,6 +503,8 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 
                 # Log the average standard deviation of error as an image
                 log_stdv_image(error_stdv, args.tboard_writer, global_step=iters, tag="error_stdv_image", save_dir=save_dir)
+            # Calculate elapsed time from the start of training
+            elapsed_time = time.time() - start_time
             total_flops += flops_per_step
             flops_per_second = total_flops / elapsed_time
             logging.info(f"Total FLOPs: {total_flops:,}")
