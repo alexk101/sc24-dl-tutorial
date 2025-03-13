@@ -9,7 +9,6 @@
 #SBATCH --gpus-per-node 8
 #SBATCH --ntasks-per-node 8  # Changed from 1 to 8 for MI250X GPUs
 #SBATCH --gpus-per-task=1
-#SBATCH --gpu-bind=closest
 
 module purge
 module load PrgEnv-gnu/8.5.0
@@ -78,5 +77,5 @@ set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
-srun --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest \
+srun --ntasks-per-node=8 --gpus-per-node=8 \
     ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
