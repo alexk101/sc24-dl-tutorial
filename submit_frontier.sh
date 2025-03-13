@@ -45,7 +45,6 @@ cd $SLURM_SUBMIT_DIR
 
 # Location of the conda environment
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
-source activate ${CONDA_ENV_PATH}
 
 source export_DDP_vars.sh 
 source export_frontier_vars.sh
