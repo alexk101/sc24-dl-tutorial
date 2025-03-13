@@ -1,13 +1,20 @@
 import os
 import sys
+from mpi4py import MPI  # Import MPI first
 
-# Print environment variables before importing torch
+# Initialize MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+world_size = comm.Get_size()
+
+# Print environment variables
 print(f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')}")
 print(f"HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
 print(f"ROCR_VISIBLE_DEVICES={os.environ.get('ROCR_VISIBLE_DEVICES')}")
 print(f"SLURM_LOCALID={os.environ.get('SLURM_LOCALID')}")
 print(f"RANK={os.environ.get('RANK')}")
 print(f"LOCAL_RANK={os.environ.get('LOCAL_RANK')}")
+print(f"MPI Rank={rank}, World Size={world_size}")
 
 # Now import torch
 import torch
