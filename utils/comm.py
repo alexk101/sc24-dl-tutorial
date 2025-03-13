@@ -80,8 +80,10 @@ def get_local_rank():
 def init(params, verbose=False):
     # init torch.distributed
     if os.getenv("MACHINE") == "frontier":
+        logging.info("Initializing process group using MPI")
         init_process_group_mpi()
     else:
+        logging.info("Initializing process group using Perlmutter method")
         init_process_group_perl()
 
     # set model parallel sizes
@@ -160,7 +162,7 @@ def init_process_group_mpi():
     os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
     os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
     os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
-    
+
     # Log distributed training parameters
     logging.info(f"Distributed training parameters:")
     logging.info(f"  World Size: {world_size}")

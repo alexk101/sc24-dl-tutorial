@@ -755,6 +755,7 @@ if __name__ == "__main__":
 
     # get info from comm
     world_size = comm.get_world_size()
+    logging.info(f"Post init: World size: {world_size}")
     world_rank = comm.get_world_rank()
     local_rank = comm.get_local_rank()
     params.distributed = world_size > 1
