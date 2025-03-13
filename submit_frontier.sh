@@ -47,19 +47,20 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 # Command line arguments
 args="${@}"
 
+# Set GPU visibility for this task
+export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
+export HIP_VISIBLE_DEVICES=$SLURM_LOCALID
+export ROCR_VISIBLE_DEVICES=$SLURM_LOCALID
+
+# Source DDP and Frontier-specific variables
+source export_DDP_vars.sh
+source export_frontier_vars.sh
+echo "ROCM_PATH RANK=$RANK: $ROCM_PATH"
+
 # Run with srun, sourcing environment variables inside each task
 set -x
 srun --export=ALL \
     bash -c "
-    # Set GPU visibility for this task
-    export CUDA_VISIBLE_DEVICES=\$SLURM_LOCALID
-    export HIP_VISIBLE_DEVICES=\$SLURM_LOCALID
-    export ROCR_VISIBLE_DEVICES=\$SLURM_LOCALID
-    echo \"ROCM_PATH RANK=\$RANK: \$ROCM_PATH\"
-    
-    # Source DDP and Frontier-specific variables
-    source export_DDP_vars.sh
-    source export_frontier_vars.sh
     
     # Print debug info
     echo \"Task \$SLURM_PROCID: RANK=\$RANK, LOCAL_RANK=\$LOCAL_RANK, HIP_VISIBLE_DEVICES=\$HIP_VISIBLE_DEVICES\"
