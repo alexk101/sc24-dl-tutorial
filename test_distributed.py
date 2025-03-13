@@ -56,7 +56,8 @@ def main():
     try:
         dist.init_process_group(
             backend="nccl",
-            init_method=f"tcp://{master_addr}:{master_port}",
+            # init_method=f"tcp://{master_addr}:{master_port}",
+            init_method='env://',
             world_size=world_size,
             rank=rank
         )
