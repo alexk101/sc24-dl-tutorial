@@ -12,7 +12,6 @@ from mpi4py import MPI
 
 # dummy placeholder
 _COMM_GROUPS = {}
-comm = MPI.COMM_WORLD
 
 # routines for specific comm groups
 def get_names():
@@ -54,7 +53,7 @@ def get_world_size():
     if not dist.is_initialized():
         return 1
     else:
-        return comm.Get_size()
+        return dist.get_world_size()
 
 
 def get_world_rank():
@@ -62,7 +61,7 @@ def get_world_rank():
     if not dist.is_initialized():
         return 0
     else:
-        return comm.Get_rank()
+        return dist.get_rank()
 
 
 def get_local_rank():
@@ -70,19 +69,18 @@ def get_local_rank():
     if not dist.is_initialized():
         return 0
     else:
-        num_gpus_per_node = torch.cuda.device_count()
-        global_rank = comm.Get_rank()
-        local_rank = int(global_rank) % int(num_gpus_per_node) 
-        return local_rank
+        if os.getenv("LOCAL_RANK") is not None:
+            # Use env var if available
+            return int(os.getenv("LOCAL_RANK"))
+        else:
+            return get_world_rank() % torch.cuda.device_count()
 
 
 def init(params, verbose=False):
     # init torch.distributed
     if os.getenv("MACHINE") == "frontier":
-        logging.info("Initializing process group using MPI")
         init_process_group_mpi()
     else:
-        logging.info("Initializing process group using Perlmutter method")
         init_process_group_perl()
 
     # set model parallel sizes
@@ -156,7 +154,7 @@ def init_process_group_mpi():
     local_rank = int(global_rank) % int(num_gpus_per_node) 
     port = int(os.getenv("MASTER_PORT", 0))
     master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
-
+    
     # Log distributed training parameters
     logging.info(f"Distributed training parameters:")
     logging.info(f"  World Size: {world_size}")
