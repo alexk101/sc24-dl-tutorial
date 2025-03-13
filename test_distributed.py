@@ -52,9 +52,9 @@ def main():
     try:
         dist.init_process_group(
             backend="nccl",
-            init_method=f"tcp://{master_addr}:{master_port}",
-            world_size=world_size,
-            rank=rank
+            # init_method=f"tcp://{master_addr}:{master_port}",
+            # world_size=world_size,
+            # rank=rank
         )
         log.info("Process group initialized successfully")
     except Exception as e:
