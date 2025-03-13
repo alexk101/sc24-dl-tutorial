@@ -48,3 +48,8 @@ export MASTER_PORT=3442  # PyTorch's default port
 export HSA_ENABLE_SDMA=0
 export FI_CXI_RX_MATCH_MODE=hybrid
 
+# Make all GPUs visible to all processes - critical for Frontier MI250X GPUs
+# This ensures PyTorch can detect all GPUs properly
+export HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export ROCR_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+

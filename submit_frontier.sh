@@ -18,22 +18,14 @@ cleanup_handler() {
 }
 trap 'cleanup_handler' USR1
 
-# Set up the data and log directories
-# DATADIR=/pscratch/sd/a/akiefer/era5
-
-# Print the ROCM version on each node
-scontrol show hostnames $SLURM_NODELIST > job.node.list
-input="./job.node.list"
-readarray -t arr <"$input"
-
-for row in "${arr[@]}";do
-  row_array=(${row})
-  first=${row_array[0]}
-  echo ${first}
-  cmd="ssh ${USER}@${first} /opt/rocm-6.2.4/bin/rocm-smi"
-  echo $cmd
-  $cmd
-done
+# Load modules first - explicitly
+module purge
+module load PrgEnv-gnu/8.5.0
+module load miniforge3/23.11.0-0
+module load rocm/6.2.4
+module load craype-accel-amd-gfx90a
+module load cray-hdf5-parallel/1.12.2.11
+module load libfabric/1.22.0
 
 # Set up environment variables
 export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
@@ -43,30 +35,21 @@ mkdir -p ${LOGDIR}
 export MACHINE=frontier
 export HDF5_USE_FILE_LOCKING=FALSE
 
+# Source environment variables for DDP - before srun
+source export_DDP_vars.sh
+source export_frontier_vars.sh
+
+# Set master address
+export MASTER_ADDR=$(hostname -i)
+export MASTER_PORT=3442
+
 # Location of the conda environment
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 
 # Command line arguments
 args="${@}"
 
-export MASTER_ADDR=$(hostname -i)
-# Run with srun, sourcing environment variables inside each task
-set -x
-srun --export=ALL \
-    bash -c "
-    # Set GPU visibility for this task
-    export CUDA_VISIBLE_DEVICES=\$SLURM_LOCALID
-    export HIP_VISIBLE_DEVICES=\$SLURM_LOCALID
-    export ROCR_VISIBLE_DEVICES=\$SLURM_LOCALID
-    
-    # Source DDP and Frontier-specific variables
-    source export_DDP_vars.sh
-    source export_frontier_vars.sh
-    echo \"ROCM_PATH RANK=\$RANK: \$ROCM_PATH\"
-    
-    # Print debug info
-    echo \"Task \$SLURM_PROCID: RANK=\$RANK, LOCAL_RANK=\$LOCAL_RANK, HIP_VISIBLE_DEVICES=\$HIP_VISIBLE_DEVICES\"
-    
-    # Run the Python script
-    ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
-    "
+# Run with srun directly - no bash -c wrapper
+# IMPORTANT: Do NOT set CUDA_VISIBLE_DEVICES, HIP_VISIBLE_DEVICES, or ROCR_VISIBLE_DEVICES
+# to allow all processes to see all GPUs
+srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpus-per-task=1 ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}

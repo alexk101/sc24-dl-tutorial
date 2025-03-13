@@ -73,11 +73,12 @@ def initialize_gpu(local_rank):
         
         # Check visible devices
         hip_visible = os.environ.get("HIP_VISIBLE_DEVICES", "")
-        logging.info(f"HIP_VISIBLE_DEVICES={hip_visible}, local_rank={local_rank}")
+        rocr_visible = os.environ.get("ROCR_VISIBLE_DEVICES", "")
+        logging.info(f"HIP_VISIBLE_DEVICES={hip_visible}, ROCR_VISIBLE_DEVICES={rocr_visible}, local_rank={local_rank}")
         
-        # When HIP_VISIBLE_DEVICES is set to a single value, the device is always 0
-        # from the perspective of the current process
-        device_id = 0
+        # On Frontier, we need to use the local_rank as the device ID
+        # when all GPUs are visible to all processes
+        device_id = local_rank
         
         logging.info(f"Attaching GPU {device_id}")
         torch.cuda.set_device(device_id)
