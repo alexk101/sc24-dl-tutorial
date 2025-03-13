@@ -10,23 +10,6 @@ from utils import logging_utils
 logging_utils.config_logger()
 from utils.YParams import YParams
 
-# Set GPU device environment variables BEFORE importing torch
-# This is critical for ROCm/HIP on Frontier
-if os.getenv("MACHINE") == "frontier":
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    global_rank = comm.Get_rank()
-    num_gpus_per_node = int(os.environ.get("SLURM_GPUS_PER_NODE", "8"))
-    local_rank = int(global_rank) % num_gpus_per_node
-    
-    # Set GPU device environment variables
-    os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
-    os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
-    
-    logging.info(f"Pre-init: Rank {global_rank}, Local Rank {local_rank}, Setting GPU device {local_rank}")
-    logging.info(f"Environment variables: HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
-
 # Now import the rest of the modules
 from utils import get_data_loader_distributed
 from utils import comm

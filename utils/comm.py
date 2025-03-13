@@ -156,11 +156,6 @@ def init_process_group_mpi():
     local_rank = int(global_rank) % int(num_gpus_per_node) 
     port = int(os.getenv("MASTER_PORT", 0))
     master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
-    
-    # Set GPU device - critical for ROCm/HIP
-    os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
-    os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
 
     # Log distributed training parameters
     logging.info(f"Distributed training parameters:")
