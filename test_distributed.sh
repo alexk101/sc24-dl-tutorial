@@ -31,5 +31,4 @@ export MASTER_PORT=3442
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 
 # Run with explicit GPU binding
-srun --ntasks=16 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest \
-    ${CONDA_ENV_PATH}/bin/python test_distributed.py
+srun --ntasks=16 --ntasks-per-node=8 --gpus-per-node=8 ${CONDA_ENV_PATH}/bin/python test_distributed.py
