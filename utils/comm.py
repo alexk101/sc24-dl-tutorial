@@ -148,13 +148,13 @@ def init_process_group_perl():
 def init_process_group_mpi():
     """Initialize the process group using MPI"""
     num_gpus_per_node = torch.cuda.device_count()
-    # comm = MPI.COMM_WORLD
-    # world_size = comm.Get_size()
-    # global_rank = comm.Get_rank()
-    # local_rank = int(global_rank) % int(num_gpus_per_node) 
-    world_size = int(os.getenv("WORLD_SIZE", 1))
-    world_rank = int(os.getenv("RANK", 0))
-    local_rank = int(os.getenv("LOCAL_RANK", 0))
+    comm = MPI.COMM_WORLD
+    world_size = comm.Get_size()
+    world_rank = comm.Get_rank()
+    local_rank = int(world_rank) % int(num_gpus_per_node) 
+    # world_size = int(os.getenv("WORLD_SIZE", 1))
+    # world_rank = int(os.getenv("RANK", 0))
+    # local_rank = int(os.getenv("LOCAL_RANK", 0))
     port = int(os.getenv("MASTER_PORT", 0))
     master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
     

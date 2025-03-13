@@ -667,12 +667,6 @@ def load_checkpoint(model, optimizer, scheduler, params, args, world_rank, local
 
 if __name__ == "__main__":
     logging.info(f"MACHINE={os.getenv('MACHINE')}")
-    if os.getenv("MACHINE") == "frontier":
-        os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-        os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-        os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-        logging.info(f"Set GPU device environment variables: HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--run_num", default="00", type=str, help="tag for indexing the current experiment",)
     parser.add_argument("--scale_depth", type=int, default=1.0, help="Scaling factor for number of transformer layers")
