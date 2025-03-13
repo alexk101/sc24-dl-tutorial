@@ -70,6 +70,7 @@ def initialize_gpu(local_rank):
         torch.backends.cudnn.benchmark = True
         torch.cuda.set_device(local_rank)
         device = torch.device(f"cuda:{local_rank}")
+        logging.info(f"Initialized GPU {local_rank} on device {device}")
         if NVIDIA_AVAILABLE:
             pynvml.nvmlInit()
             handle = pynvml.nvmlDeviceGetHandleByIndex(local_rank)
