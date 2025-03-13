@@ -43,6 +43,9 @@ def main():
         world_size = comm.Get_size()
         global_rank = rank = comm.Get_rank()
         local_rank = int(rank) % int(num_gpus_per_node) # local_rank and device are 0 when using 1 GPU per task
+        master_addr = os.environ["MASTER_ADDR"]
+        master_port = os.environ["MASTER_PORT"]
+
 
     except KeyError as e:
         print(f"Missing environment variable: {e}")
