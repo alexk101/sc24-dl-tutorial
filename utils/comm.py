@@ -79,10 +79,12 @@ def get_local_rank():
 def init(params, verbose=False):
     # init torch.distributed
     if os.getenv("MACHINE") == "frontier":
-        logging.info("Initializing process group using MPI")
-        init_process_group_mpi()
+        # On Frontier, we know there are 8 GPUs per node
+        # This avoids relying on torch.cuda.device_count() which might return 0
+        num_gpus_per_node = int(os.environ.get("SLURM_GPUS_PER_NODE", "8"))
+        logging.info(f"Running on Frontier with {num_gpus_per_node} GPUs per node")
+        init_process_group_mpi(num_gpus_per_node)
     else:
-        logging.info("Initializing process group using Perlmutter method")
         init_process_group_perl()
 
     # set model parallel sizes
@@ -147,16 +149,22 @@ def init_process_group_perl():
             )
 
 
-def init_process_group_mpi():
+def init_process_group_mpi(num_gpus_per_node=None):
     """Initialize the process group using MPI"""
-    num_gpus_per_node = torch.cuda.device_count()
+    if num_gpus_per_node is None:
+        num_gpus_per_node = torch.cuda.device_count()
+        if num_gpus_per_node == 0:
+            # Fallback to environment variable or default to 8 (common for Frontier)
+            num_gpus_per_node = int(os.environ.get("SLURM_GPUS_PER_NODE", "8"))
+            logging.warning(f"No GPUs detected by PyTorch, using {num_gpus_per_node} from environment")
+    
     comm = MPI.COMM_WORLD
     world_size = comm.Get_size()
     global_rank = comm.Get_rank()
     local_rank = int(global_rank) % int(num_gpus_per_node) 
     port = int(os.getenv("MASTER_PORT", 0))
     master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
-
+    
     # Log distributed training parameters
     logging.info(f"Distributed training parameters:")
     logging.info(f"  World Size: {world_size}")
@@ -164,12 +172,12 @@ def init_process_group_mpi():
     logging.info(f"  Local Rank: {local_rank}")
     logging.info(f"  Master Address: {master_address}")
     logging.info(f"  Master Port: {port}")
+    logging.info(f"  GPUs per node: {num_gpus_per_node}")
 
     if world_size > 1:
         with disable_logging():
             dist.init_process_group(
                 backend="nccl",
-                # init_method="tcp://{}:{}".format(master_address, port),
                 init_method='env://',
                 rank=global_rank,
                 world_size=world_size,

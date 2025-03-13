@@ -23,11 +23,6 @@ source export_frontier_vars.sh
 # Override MASTER_PORT if needed
 export MASTER_PORT=3442
 
-# Add these critical environment variables for ROCm
-# export ROCR_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-# export HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-# export HSA_ENABLE_SDMA=0
-
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 
 # Run with explicit GPU binding
