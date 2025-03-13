@@ -78,5 +78,4 @@ set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
-export MASTER_PORT=3442 # default from torch launcher
 srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}

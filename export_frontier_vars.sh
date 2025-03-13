@@ -11,3 +11,5 @@ mkdir -p $NCCL_TEMP_DIR
 export NCCL_DMABUF_ENABLE=1
 export NCCL_NET_GDR_LEVEL=3
 export NCCL_ALGO=Tree
+
+export MASTER_PORT=3442 # default from torch launcher
