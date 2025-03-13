@@ -12,7 +12,7 @@ logging.basicConfig(
     format='%(asctime)s - Rank %(rank)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(f"dist_test_rank{os.environ.get('RANK', '?')}.log")
+        logging.FileHandler(f"dist_test_rank{os.environ.get('SLURM_PROCID', '?')}.log")
     ]
 )
 
@@ -57,6 +57,18 @@ def main():
         f"SLURM_LOCALID: {os.environ.get('SLURM_LOCALID')}, "
         f"SLURM_NODEID: {os.environ.get('SLURM_NODEID')}")
 
+    # Check GPU availability
+    log.info(f"CUDA available: {torch.cuda.is_available()}")
+    log.info(f"CUDA device count: {torch.cuda.device_count()}")
+    if torch.cuda.is_available():
+        for i in range(torch.cuda.device_count()):
+            log.info(f"CUDA device {i}: {torch.cuda.get_device_name(i)}")
+    
+    # Set GPU device - critical for ROCm/HIP
+    os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
+    os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
+    log.info(f"Set HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
+    
     # Initialize process group
     log.info("Initializing process group")
     try:
@@ -73,8 +85,12 @@ def main():
         sys.exit(1)
     
     # Get device
-    device = torch.device(f"cuda:0")  # Always use device 0 since we've set the environment
-    log.info(f"Using GPU: {torch.cuda.get_device_name(device)}")
+    if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+        device = torch.device("cuda:0")  # Use first visible device
+        log.info(f"Using GPU: {torch.cuda.get_device_name(device)}")
+    else:
+        log.error("No GPUs available, exiting")
+        sys.exit(1)
     
     # Test all_reduce
     log.info("Testing all_reduce operation")
