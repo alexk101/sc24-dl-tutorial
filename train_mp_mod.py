@@ -503,17 +503,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 
                 # Log the average standard deviation of error as an image
                 log_stdv_image(error_stdv, args.tboard_writer, global_step=iters, tag="error_stdv_image", save_dir=save_dir)
-                
-                # Optionally, also calculate the absolute error and its standard deviation
-                abs_error = torch.abs(error)
-                abs_error_stdv = calculate_layerwise_stdv(abs_error, tag="abs_error_stdv")
-                log_stdv_image(abs_error_stdv, args.tboard_writer, global_step=iters, tag="abs_error_stdv_image", save_dir=save_dir)
-                
-                # Calculate squared error and its standard deviation (related to variance)
-                squared_error = error ** 2
-                squared_error_stdv = calculate_layerwise_stdv(squared_error, tag="squared_error_stdv")
-                log_stdv_image(squared_error_stdv, args.tboard_writer, global_step=iters, tag="squared_error_stdv_image", save_dir=save_dir)
-            
             total_flops += flops_per_step
             flops_per_second = total_flops / elapsed_time
             logging.info(f"Total FLOPs: {total_flops:,}")
