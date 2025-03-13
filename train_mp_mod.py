@@ -300,7 +300,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
+        if world_rank == 0:
+            logging.info(f"About to synchronize at epoch {epoch} start")
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
+        if world_rank == 0:
+            logging.info(f"Synchronized at epoch {epoch} start")
         if params.distributed and (train_sampler is not None):
             train_sampler.set_epoch(epoch)
         start = time.time()
