@@ -4,6 +4,10 @@ import os
 import sys
 import subprocess
 
+NVIDIA_AVAILABLE = False
+ROCM_AVAILABLE = False
+GPU_BACKEND = None
+
 def get_gpu_backend():
     """Returns the available GPU backend ('cuda' or 'rocm') or raises RuntimeError"""
     if torch.cuda.is_available():
@@ -14,23 +18,12 @@ def get_gpu_backend():
     else:
         raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
-# Get GPU backend or fail fast
-GPU_BACKEND = get_gpu_backend()
-NVIDIA_AVAILABLE = GPU_BACKEND == 'cuda'
-ROCM_AVAILABLE = GPU_BACKEND == 'rocm'
-logging.info(f"{GPU_BACKEND.upper()} GPU support available")
-
-# Import appropriate GPU monitoring tools
-if NVIDIA_AVAILABLE:
-    import pynvml
-    pynvml.nvmlInit()
-elif ROCM_AVAILABLE:
-    rocm_path = os.getenv("ROCM_PATH")
-    if rocm_path is None:
-        raise RuntimeError("ROCM_PATH environment variable not set")
-    sys.path.append(f"{rocm_path}/libexec/rocm_smi/")
-    import rocm_smi
-    rocm_smi.initializeRsmi()
+def initialize_gpu_backend():
+    global NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND
+    GPU_BACKEND = get_gpu_backend()
+    NVIDIA_AVAILABLE = GPU_BACKEND == 'cuda'
+    ROCM_AVAILABLE = GPU_BACKEND == 'rocm'
+    logging.info(f"{GPU_BACKEND.upper()} GPU support available")
 
 
 def log_rocm_utilization():
@@ -44,7 +37,10 @@ def log_rocm_utilization():
 
 def get_gpu_info(device_index):
     """Get GPU information in a vendor-agnostic way"""
+    # Import appropriate GPU monitoring tools
     if NVIDIA_AVAILABLE:
+        import pynvml
+        pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
         name = pynvml.nvmlDeviceGetName(handle).decode('utf-8')
         memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
@@ -55,6 +51,12 @@ def get_gpu_info(device_index):
             'free_memory': memory.free
         }
     elif ROCM_AVAILABLE:
+        rocm_path = os.getenv("ROCM_PATH")
+        if rocm_path is None:
+            raise RuntimeError("ROCM_PATH environment variable not set")
+        sys.path.append(f"{rocm_path}/libexec/rocm_smi/")
+        import rocm_smi
+        rocm_smi.initializeRsmi()
         (mem_used, mem_total) = rocm_smi.getMemInfo(device_index, "vram")
         return {
             'name': f"AMD GPU {device_index}",
@@ -89,6 +91,7 @@ def initialize_gpu(local_rank):
         logging.info(f"Initialized GPU {device_id} on device {device}")
         
         if NVIDIA_AVAILABLE:
+            import pynvml
             pynvml.nvmlInit()
             handle = pynvml.nvmlDeviceGetHandleByIndex(device_id)
         elif ROCM_AVAILABLE:

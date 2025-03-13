@@ -1,13 +1,4 @@
-from utils import logging_utils
-logging_utils.config_logger()
-import sys
-import os
 import logging
-import time
-import numpy as np
-import argparse
-from utils.YParams import YParams
-
 if os.getenv("MACHINE") == "frontier":
     # Let SLURM set the GPU assignment
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
@@ -16,6 +7,14 @@ if os.getenv("MACHINE") == "frontier":
     os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
     logging.info(f"Set GPU device environment variables: HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
 
+from utils import logging_utils
+logging_utils.config_logger()
+import sys
+import os
+import time
+import numpy as np
+import argparse
+from utils.YParams import YParams
 # Now import the rest of the modules
 from utils import get_data_loader_distributed
 from utils import comm
@@ -43,7 +42,7 @@ from torch.amp import autocast, GradScaler
 import torch
 from utils.gpu_utils import (
     NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND, 
-    get_gpu_info, initialize_gpu, get_profiler, log_rocm_utilization
+    get_gpu_info, initialize_gpu, get_profiler, log_rocm_utilization, initialize_gpu_backend
 )
 
 
@@ -768,6 +767,7 @@ if __name__ == "__main__":
     local_rank = comm.get_local_rank()
     params.distributed = world_size > 1
 
+    initialize_gpu_backend()
     if args.local_batch_size:
         # Manually override batch size
         params.local_batch_size = args.local_batch_size
