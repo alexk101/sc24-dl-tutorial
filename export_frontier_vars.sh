@@ -19,6 +19,7 @@ mkdir -p $NCCL_TEMP_DIR
 
 # Ensure we use the correct network interface
 export NCCL_NET_GDR_READ=1
+export NCCL_NET_GDR_LEVEL=3
 export NCCL_LAUNCH_MODE=PARALLEL
 
 # Prevent NCCL from trying to connect to other jobs
