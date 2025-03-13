@@ -139,7 +139,10 @@ def init_process_group_perl():
             # initialize process groups
             logging.info(f"  Initializing process group with backend: {backend}")
             dist.init_process_group(
-                backend=backend, rank=world_rank, world_size=world_size, store=store
+                backend=backend, 
+                rank=world_rank, 
+                world_size=world_size, 
+                store=store
             )
 
 
@@ -153,7 +156,11 @@ def init_process_group_mpi():
     port = int(os.getenv("MASTER_PORT", 0))
     master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
     
-
+    # Set GPU device - critical for ROCm/HIP
+    os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
+    os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
+    
     # Log distributed training parameters
     logging.info(f"Distributed training parameters:")
     logging.info(f"  World Size: {world_size}")
@@ -166,8 +173,8 @@ def init_process_group_mpi():
         with disable_logging():
             dist.init_process_group(
                 backend="nccl",
-                init_method="tcp://{}:{}".format(master_address, port),
-                # init_method='env://',
+                # init_method="tcp://{}:{}".format(master_address, port),
+                init_method='env://',
                 rank=global_rank,
                 world_size=world_size,
             )
