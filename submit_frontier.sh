@@ -10,17 +10,6 @@
 #SBATCH --ntasks-per-node 8  # Changed from 1 to 8 for MI250X GPUs
 #SBATCH --gpus-per-task=1
 
-module purge
-module load PrgEnv-gnu/8.5.0
-module load miniforge3/23.11.0-0
-module load rocm/6.2.4
-module load craype-accel-amd-gfx90a
-module load cray-hdf5-parallel/1.12.2.11
-module load libfabric/1.22.0
-
-USER=kiefera
-ENABLE_AWS_OFI_RCCL_PLUGIN=1
-
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
 cleanup_handler() {
@@ -31,14 +20,6 @@ trap 'cleanup_handler' USR1
 
 # Set up the data and log directories
 # DATADIR=/pscratch/sd/a/akiefer/era5
-export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
-export SCRATCH=/lustre/orion/geo163/scratch/kiefera
-export MACHINE=frontier
-
-# RCCL
-if [ "$ENABLE_AWS_OFI_RCCL_PLUGIN" -eq 1 ]; then
-    export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRARY_PATH
-fi
 
 # Print the ROCM version on each node
 scontrol show hostnames $SLURM_NODELIST > job.node.list
@@ -54,7 +35,6 @@ for row in "${arr[@]}";do
   $cmd
 done
 
-export MIOPEN_DISABLE_CACHE=1
 
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
