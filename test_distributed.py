@@ -28,6 +28,12 @@ class RankLogger:
     def error(self, msg):
         self.logger.error(msg, extra={'rank': self.rank})
 
+# Let SLURM set the GPU assignment
+os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+# For ROCm
+os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+
 def main():
     # Get environment variables
     try:
@@ -67,13 +73,8 @@ def main():
         sys.exit(1)
     
     # Get device
-    if torch.cuda.is_available():
-        device = torch.device(f"cuda:{local_rank}")
-        torch.cuda.set_device(device)
-        log.info(f"Using GPU: {torch.cuda.get_device_name(device)}")
-    else:
-        device = torch.device("cpu")
-        log.info("Using CPU")
+    device = torch.device(f"cuda:0")  # Always use device 0 since we've set the environment
+    log.info(f"Using GPU: {torch.cuda.get_device_name(device)}")
     
     # Test all_reduce
     log.info("Testing all_reduce operation")
