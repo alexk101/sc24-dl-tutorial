@@ -48,14 +48,53 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 # Command line arguments
 args="${@}"
 
+# Create a modified test script that uses MPI ranks for GPU assignment
+cat > test_gpu_mpi.py << 'EOF'
+import os
+import sys
+from mpi4py import MPI
+
+# Initialize MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+world_size = comm.Get_size()
+node_size = 8  # Number of GPUs per node on Frontier
+local_rank = rank % node_size
+
+# Set GPU visibility based on MPI local rank
+os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
+os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
+os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
+
+# Set PyTorch distributed environment variables
+os.environ["RANK"] = str(rank)
+os.environ["WORLD_SIZE"] = str(world_size)
+os.environ["LOCAL_RANK"] = str(local_rank)
+
+# Print environment variables
+print(f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')}")
+print(f"HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
+print(f"ROCR_VISIBLE_DEVICES={os.environ.get('ROCR_VISIBLE_DEVICES')}")
+print(f"SLURM_LOCALID={os.environ.get('SLURM_LOCALID')}")
+print(f"RANK={os.environ.get('RANK')}")
+print(f"LOCAL_RANK={os.environ.get('LOCAL_RANK')}")
+print(f"MPI Rank={rank}, World Size={world_size}")
+
+# Now import torch
+import torch
+print(f"PyTorch version: {torch.__version__}")
+if hasattr(torch.version, 'hip'):
+    print(f"PyTorch HIP version: {torch.version.hip}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+print(f"Device count: {torch.cuda.device_count()}")
+
+# Try to create a tensor on GPU
+try:
+    x = torch.ones(1, device='cuda')
+    print(f"Successfully created tensor on GPU: {x}")
+except Exception as e:
+    print(f"Failed to create tensor on GPU: {e}")
+EOF
+
 # Run with srun directly - no bash -c wrapper
-srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpus-per-task=1 \
-    bash -c "
-    # Set GPU visibility for this task - IMPORTANT: Set to the same single value
-    export CUDA_VISIBLE_DEVICES=\$SLURM_LOCALID
-    export HIP_VISIBLE_DEVICES=\$SLURM_LOCALID
-    export ROCR_VISIBLE_DEVICES=\$SLURM_LOCALID
-    
-    # Run the Python script
-    ${CONDA_ENV_PATH}/bin/python test_gpu.py
-    "
+srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpus-per-task=1 ${CONDA_ENV_PATH}/bin/python test_gpu_mpi.py
