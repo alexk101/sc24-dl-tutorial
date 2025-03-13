@@ -69,7 +69,7 @@ source activate ${CONDA_ENV_PATH}
 
 set -x
 srun  \
-bash -c "
-source export_DDP_vars.sh source export_frontier_vars.sh
-${PROFILE_CMD} ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
-"
+    bash -c "
+    source export_DDP_vars.sh export_frontier_vars.sh
+    ${PROFILE_CMD} ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
+    "
