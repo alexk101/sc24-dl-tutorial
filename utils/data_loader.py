@@ -64,7 +64,7 @@ class ERA5Dataset(Dataset):
         self.years = [int(os.path.splitext(os.path.basename(x))[0][-4:]) for x in self.files_paths]
         self.n_years = len(self.files_paths)
 
-        with h5py.File(self.files_paths[0], 'r') as _f:
+        with h5py.File(self.files_paths[0], 'r', swmr=True) as _f:
             logging.info("Getting file stats from {}".format(self.files_paths[0]))
             self.n_samples_per_year = _f['fields'].shape[0]
             self.img_shape_x = self.params.img_size[0]
@@ -80,7 +80,7 @@ class ERA5Dataset(Dataset):
         logging.info("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
 
     def _open_file(self, year_idx):
-        _file = h5py.File(self.files_paths[year_idx], 'r')
+        _file = h5py.File(self.files_paths[year_idx], 'r', swmr=True)
         self.files[year_idx] = _file['fields']  
     
     def __len__(self):

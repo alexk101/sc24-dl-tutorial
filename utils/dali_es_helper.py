@@ -38,7 +38,7 @@ class ERA5ES(object):
         self.years = [int(os.path.splitext(os.path.basename(x))[0][-4:]) for x in self.files_paths]
         self.n_years = len(self.files_paths)
 
-        with h5py.File(self.files_paths[0], 'r') as _f:
+        with h5py.File(self.files_paths[0], 'r', swmr=True) as _f:
             logging.info("Getting file stats from {}".format(self.files_paths[0]))
             self.n_samples_per_year = _f['fields'].shape[0]
             self.img_shape_x = self.img_size[0]
@@ -110,7 +110,7 @@ class ERA5ES(object):
             local_idx += step
 
         if self.files[year_idx] is None:
-            self.files[year_idx] = h5py.File(self.files_paths[year_idx], 'r')
+            self.files[year_idx] = h5py.File(self.files_paths[year_idx], 'r', swmr=True)
             self.dsets[year_idx] = self.files[year_idx]['fields']
         
         tmp_inp = self.dsets[year_idx][local_idx, ...]
