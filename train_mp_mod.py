@@ -313,6 +313,8 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         dat_time = 0.0
         log_time = 0.0
 
+        if world_rank == 0:
+            logging.info(f"Training loop started at epoch {epoch}")
         model.train()
         step_count = 0
 
@@ -375,9 +377,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     args.tboard_writer.add_scalar("Performance/comm_ratio", timing_stats["comm_ratio"], iters)
 
             if params.distributed:
+                logging.info(f"Rank {world_rank}: About to perform all_reduce operation")
                 torch.distributed.all_reduce(
                     loss, op=ReduceOp.AVG, group=comm.get_group("dp")
                 )
+                logging.info(f"Rank {world_rank}: All_reduce operation completed")
             tr_loss.append(loss.item())
 
             if profiler:
