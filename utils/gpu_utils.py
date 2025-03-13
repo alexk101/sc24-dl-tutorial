@@ -79,8 +79,7 @@ def initialize_gpu(local_rank):
         else:
             handle = None
     else:
-        device = torch.device("cpu")
-        handle = None
+        raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
         
     return device, handle
 
