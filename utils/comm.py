@@ -12,7 +12,7 @@ from mpi4py import MPI
 
 # dummy placeholder
 _COMM_GROUPS = {}
-
+comm = MPI.COMM_WORLD
 
 # routines for specific comm groups
 def get_names():
@@ -54,7 +54,7 @@ def get_world_size():
     if not dist.is_initialized():
         return 1
     else:
-        return dist.get_world_size()
+        return comm.Get_size()
 
 
 def get_world_rank():
@@ -62,7 +62,7 @@ def get_world_rank():
     if not dist.is_initialized():
         return 0
     else:
-        return dist.get_rank()
+        return comm.Get_rank()
 
 
 def get_local_rank():
@@ -70,11 +70,10 @@ def get_local_rank():
     if not dist.is_initialized():
         return 0
     else:
-        if os.getenv("LOCAL_RANK") is not None:
-            # Use env var if available
-            return int(os.getenv("LOCAL_RANK"))
-        else:
-            return get_world_rank() % torch.cuda.device_count()
+        num_gpus_per_node = torch.cuda.device_count()
+        global_rank = comm.Get_rank()
+        local_rank = int(global_rank) % int(num_gpus_per_node) 
+        return local_rank
 
 
 def init(params, verbose=False):
