@@ -9,6 +9,8 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --gpus-per-task=1
 
+unset SLURM_EXPORT_ENV
+
 module purge
 module load PrgEnv-gnu/8.5.0
 module load miniforge3/23.11.0-0
