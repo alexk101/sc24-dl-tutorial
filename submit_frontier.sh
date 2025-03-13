@@ -20,6 +20,7 @@ module load cray-hdf5-parallel/1.12.2.11
 module load libfabric/1.22.0
 
 USER=kiefera
+ENABLE_AWS_OFI_RCCL_PLUGIN=0
 
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
@@ -36,7 +37,9 @@ export SCRATCH=/lustre/orion/geo163/scratch/kiefera
 export MACHINE=frontier
 
 # RCCL
-export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRARY_PATH
+if [ "$ENABLE_AWS_OFI_RCCL_PLUGIN" -eq 1 ]; then
+    export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRARY_PATH
+fi
 
 # Needed to bypass MIOpen, Disk I/O Errors
 # export MIOPEN_USER_DB_PATH="/tmp/my-miopen-cache-$SLURM_JOB_ID"
@@ -53,7 +56,7 @@ for row in "${arr[@]}";do
   row_array=(${row})
   first=${row_array[0]}
   echo ${first}
-  cmd="ssh ${USER}@${first} rocm-smi"
+  cmd="ssh ${USER}@${first} /opt/rocm-6.2.4/bin/rocm-smi"
   echo $cmd
   $cmd
 done
