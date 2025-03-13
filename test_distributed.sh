@@ -4,7 +4,10 @@
 #SBATCH -o dist_test-%j.out
 #SBATCH -t 00:10:00
 #SBATCH -p batch
-#SBATCH -N 2  # Start with 2 nodes for testing
+#SBATCH -N 2
+#SBATCH --ntasks=16
+#SBATCH --ntasks-per-node=8
+#SBATCH --gpus-per-task=1
 
 module purge
 module load PrgEnv-gnu/8.5.0
@@ -24,4 +27,4 @@ export MASTER_PORT=3442
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 
 # Run the test script
-srun ${CONDA_ENV_PATH}/bin/python test_distributed.py
+srun --ntasks=16 --ntasks-per-node=8 --gpus-per-task=1 ${CONDA_ENV_PATH}/bin/python test_distributed.py
