@@ -70,9 +70,6 @@ def main():
             log.info(f"CUDA device {i}: {torch.cuda.get_device_name(i)}")
     
     # Set GPU device - critical for ROCm/HIP
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
-    os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
-    os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
     log.info(f"Set HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
     
     # Initialize process group
