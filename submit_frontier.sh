@@ -35,11 +35,11 @@ for row in "${arr[@]}";do
   $cmd
 done
 
-
-LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
-mkdir -p ${LOGDIR}
 args="${@}"
 
+export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
+export SCRATCH=/lustre/orion/geo163/scratch/kiefera
+export MACHINE=frontier
 export HDF5_USE_FILE_LOCKING=FALSE
 cd $SLURM_SUBMIT_DIR
 

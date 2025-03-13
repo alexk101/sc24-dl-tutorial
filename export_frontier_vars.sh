@@ -10,10 +10,12 @@ if [ "$ENABLE_AWS_OFI_RCCL_PLUGIN" -eq 1 ]; then
     export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRARY_PATH
 fi
 export MIOPEN_DISABLE_CACHE=1
-USER=kiefera
+
 export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
 export SCRATCH=/lustre/orion/geo163/scratch/kiefera
 export MACHINE=frontier
+LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
+mkdir -p ${LOGDIR}
 
 # Add these environment variables before source export_DDP_vars.sh
 # export NCCL_DEBUG=INFO # For debugging network issues
