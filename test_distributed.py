@@ -29,11 +29,11 @@ class RankLogger:
     def error(self, msg):
         self.logger.error(msg, extra={'rank': self.rank})
 
-# Let SLURM set the GPU assignment
-os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-# For ROCm
-os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+# # Let SLURM set the GPU assignment
+# os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+# # For ROCm
+# os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+# os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
 
 def main():
     # Get environment variables
@@ -69,10 +69,10 @@ def main():
         for i in range(torch.cuda.device_count()):
             log.info(f"CUDA device {i}: {torch.cuda.get_device_name(i)}")
     
-    # Set GPU device - critical for ROCm/HIP
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
-    os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
-    os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
+    # # Set GPU device - critical for ROCm/HIP
+    # os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
+    # os.environ["HIP_VISIBLE_DEVICES"] = str(local_rank)
+    # os.environ["ROCR_VISIBLE_DEVICES"] = str(local_rank)
     log.info(f"Set HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}")
     
     # Initialize process group
