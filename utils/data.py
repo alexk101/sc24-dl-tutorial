@@ -8,6 +8,10 @@ TEMP_TRAIN = Path(f"{SCRATCH}/temp_train")
 TEMP_VAL = Path(f"{SCRATCH}/temp_val")
 
 def data_subset(n_train: int=25):
+    if (TEMP_TRAIN/str(n_train)).exists() and (TEMP_VAL/str(n_train)).exists():
+        logging.info(f"Temp train and val dirs {TEMP_TRAIN/str(n_train)} and {TEMP_VAL/str(n_train)} already exist")
+        return
+
     target = Path(DATA_DIR)
     all_data = list((target/'train').iterdir())
     all_data = sorted(all_data)
