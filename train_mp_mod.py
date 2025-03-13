@@ -1,6 +1,6 @@
 import sys
 import os
-
+import logging
 if os.getenv("MACHINE") == "frontier":
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
     os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
@@ -11,7 +11,6 @@ import time
 import numpy as np
 import argparse
 
-import logging
 from utils import logging_utils
 
 logging_utils.config_logger()
