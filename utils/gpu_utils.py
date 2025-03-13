@@ -5,14 +5,21 @@ import sys
 import subprocess
 
 def get_gpu_backend():
-    """Returns the available GPU backend ('cuda' or 'rocm') or raises RuntimeError"""
+    """Determine which GPU backend is available (CUDA or ROCm)"""
+    # First check if we're on Frontier
+    if os.getenv("MACHINE") == "frontier":
+        # On Frontier, we know we have ROCm GPUs
+        return "rocm"
+    
+    # For other systems, do the normal detection
     if torch.cuda.is_available():
-        # Check if we're using ROCm by looking for HIP in the PyTorch build info
-        if torch.version.hip is not None:
-            return 'rocm'
-        return 'cuda'
-    else:
-        raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
+        if hasattr(torch.version, 'hip') and torch.version.hip is not None:
+            return "rocm"
+        else:
+            return "cuda"
+    
+    # No GPUs detected
+    raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
 # Get GPU backend or fail fast
 GPU_BACKEND = get_gpu_backend()
