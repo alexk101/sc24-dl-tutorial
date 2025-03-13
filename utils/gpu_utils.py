@@ -68,15 +68,31 @@ def initialize_gpu(local_rank):
     """Initialize GPU in a vendor-agnostic way"""
     if torch.cuda.is_available():  # This works for both CUDA and ROCm
         torch.backends.cudnn.benchmark = True
-        logging.info(f"Attaching GPU {local_rank}")
-        torch.cuda.set_device(local_rank)
-        device = torch.device(f"cuda:{local_rank}")
-        logging.info(f"Initialized GPU {local_rank} on device {device}")
+        
+        # Check visible devices
+        hip_visible = os.environ.get("HIP_VISIBLE_DEVICES", "")
+        logging.info(f"HIP_VISIBLE_DEVICES={hip_visible}, local_rank={local_rank}")
+        
+        # When HIP_VISIBLE_DEVICES is set to a single value, the device is always 0
+        # from the perspective of the current process
+        device_id = 0
+        
+        logging.info(f"Attaching GPU {device_id}")
+        torch.cuda.set_device(device_id)
+        device = torch.device(f"cuda:{device_id}")
+        
+        # Log device properties
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(device_id)
+            logging.info(f"Using device: {props.name}, Total memory: {props.total_memory/(1024**3):.2f} GB")
+        
+        logging.info(f"Initialized GPU {device_id} on device {device}")
+        
         if NVIDIA_AVAILABLE:
             pynvml.nvmlInit()
-            handle = pynvml.nvmlDeviceGetHandleByIndex(local_rank)
+            handle = pynvml.nvmlDeviceGetHandleByIndex(device_id)
         elif ROCM_AVAILABLE:
-            handle = local_rank  # ROCm SMI uses device index directly
+            handle = device_id  # ROCm SMI uses device index directly
         else:
             handle = None
     else:
