@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A YourAccount
+#SBATCH -A geo163
 #SBATCH -J dist_test
 #SBATCH -o dist_test-%j.out
 #SBATCH -t 00:10:00
