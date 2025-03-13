@@ -120,9 +120,10 @@ def init_process_group_perl():
     logging.info(f"Distributed training parameters:")
     logging.info(f"  World Size: {world_size}")
     logging.info(f"  World Rank: {world_rank}") 
+    logging.info(f"  Local Rank: {local_rank}")
     logging.info(f"  Master Address: {master_address}")
     logging.info(f"  Master Port: {port}")
-    logging.info(f"  Local Rank: {local_rank}")
+    
 
     if world_size > 1:
         with disable_logging():
@@ -149,14 +150,24 @@ def init_process_group_mpi():
     world_size = comm.Get_size()
     global_rank = comm.Get_rank()
     local_rank = int(global_rank) % int(num_gpus_per_node) 
+    port = int(os.getenv("MASTER_PORT", 0))
+    master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
+    
 
+    # Log distributed training parameters
+    logging.info(f"Distributed training parameters:")
+    logging.info(f"  World Size: {world_size}")
+    logging.info(f"  Global Rank: {global_rank}") 
+    logging.info(f"  Local Rank: {local_rank}")
+    logging.info(f"  Master Address: {master_address}")
+    logging.info(f"  Master Port: {port}")
 
     if world_size > 1:
         with disable_logging():
             dist.init_process_group(
                 backend="nccl",
-                #init_method="tcp://{}:{}".format(args.master_addr, args.master_port),
-                init_method='env://',
+                init_method="tcp://{}:{}".format(master_address, port),
+                # init_method='env://',
                 rank=global_rank,
                 world_size=world_size,
             )
