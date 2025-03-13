@@ -19,6 +19,8 @@ module load craype-accel-amd-gfx90a
 module load cray-hdf5-parallel/1.12.2.11
 module load libfabric/1.22.0
 
+USER=kiefera
+
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
 cleanup_handler() {
@@ -41,6 +43,21 @@ export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRA
 # export MIOPEN_CUSTOM_CACHE_DIR=${MIOPEN_USER_DB_PATH}
 # rm -rf ${MIOPEN_USER_DB_PATH}
 # mkdir -p ${MIOPEN_USER_DB_PATH}
+
+# Print the ROCM version on each node
+scontrol show hostnames $SLURM_NODELIST > job.node.list
+input="./job.node.list"
+readarray -t arr <"$input"
+
+for row in "${arr[@]}";do
+  row_array=(${row})
+  first=${row_array[0]}
+  echo ${first}
+  cmd="ssh ${USER}@${first} rocm-smi"
+  echo $cmd
+  $cmd
+done
+
 export MIOPEN_DISABLE_CACHE=1
 
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
