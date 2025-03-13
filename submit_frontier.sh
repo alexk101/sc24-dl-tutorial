@@ -78,5 +78,5 @@ set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
-srun --ntasks=16 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest\\
+srun --ntasks=16 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest \
     ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
