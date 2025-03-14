@@ -44,9 +44,13 @@ if os.environ.get("MACHINE") == "frontier":
         # If both are set but different, set both to the same value
         elif hip_devices != rocr_devices:
             logging.warning(f"HIP_VISIBLE_DEVICES ({hip_devices}) and ROCR_VISIBLE_DEVICES ({rocr_devices}) are different")
-            logging.info("Setting both to all GPUs")
-            os.environ["HIP_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
-            os.environ["ROCR_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+            logging.info("Setting both to the same value (using SLURM_LOCALID if available)")
+            if slurm_localid is not None:
+                os.environ["HIP_VISIBLE_DEVICES"] = slurm_localid
+                os.environ["ROCR_VISIBLE_DEVICES"] = slurm_localid
+            else:
+                os.environ["HIP_VISIBLE_DEVICES"] = "0"
+                os.environ["ROCR_VISIBLE_DEVICES"] = "0"
 
 # Import torch early to ensure GPU detection works properly
 import torch

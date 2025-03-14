@@ -50,7 +50,7 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 args="${@}"
 
 # IMPORTANT: Do NOT set HIP_VISIBLE_DEVICES or ROCR_VISIBLE_DEVICES here
-# Let each process set them based on SLURM_LOCALID
+# Let each process set them based on SLURM_LOCALID in the Python script
 
 # Log environment variables for debugging
 echo "Environment variables before srun:"
