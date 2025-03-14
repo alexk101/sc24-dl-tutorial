@@ -153,15 +153,8 @@ def initialize_gpu(local_rank):
     
     # Check if CUDA is available after setting environment variables
     if not torch.cuda.is_available():
-        if os.environ.get("MACHINE") == "frontier":
-            log.warning("CUDA not available on Frontier, but continuing with ROCm backend")
-            # On Frontier, we'll try to proceed with ROCm even if CUDA isn't detected
-            device = torch.device(f"cuda:{device_id}")
-            handle = device_id
-            return device, handle
-        else:
-            log.error("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
-            raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
+        log.error("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
+        raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
     
     log.info(f"Attaching GPU {device_id}")
     torch.cuda.set_device(device_id)
