@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 import time
+from gpu_utils import GLOBAL_LOG
+
 @torch.jit.script
 def lat(j: torch.Tensor, num_lat: int) -> torch.Tensor:
     return 90. - j * 180./float(num_lat-1)
@@ -43,8 +45,8 @@ def weighted_acc(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     result = weighted_acc_channels(pred, target)
     return torch.mean(result, dim=0)
 
-def time_communication(comm, device, timeout=10.0):
-    """Time communication operations with timeout and error handling"""
+def time_communication(comm, device):
+    """Time communication operations with proper error handling"""
     stats = {
         "all_reduce_time_ms": 0.0,
         "broadcast_time_ms": 0.0
@@ -64,11 +66,17 @@ def time_communication(comm, device, timeout=10.0):
         end = time.time()
         stats["all_reduce_time_ms"] = (end - start) * 1000
         
-        # Time broadcast
+        # Time broadcast - use the first rank in the DP group as source
         tensor = torch.ones(1, device=device)
         torch.cuda.synchronize()
         start = time.time()
-        torch.distributed.broadcast(tensor, src=0, group=comm.get_group("dp"))
+        
+        # Get the first rank in the DP group to be the source
+        dp_group = comm.get_group("dp")
+        dp_ranks = comm.get_ranks_in_group("dp")
+        src_rank = dp_ranks[0] if dp_ranks else 0
+        
+        torch.distributed.broadcast(tensor, src=src_rank, group=dp_group)
         torch.cuda.synchronize()
         end = time.time()
         stats["broadcast_time_ms"] = (end - start) * 1000
