@@ -8,7 +8,6 @@
 #SBATCH -o %x-%j.out
 #SBATCH --gpus-per-node=8
 #SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
-#SBATCH --gpus-per-task=1
 
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing
@@ -39,37 +38,12 @@ export HDF5_USE_FILE_LOCKING=FALSE
 source export_DDP_vars.sh
 source export_frontier_vars.sh
 
-# Set master address
-export MASTER_ADDR=$(hostname -i)
-export MASTER_PORT=3442
-
 # Location of the conda environment
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 
 # Command line arguments
 args="${@}"
 
-# IMPORTANT: Unset any global GPU visibility variables to avoid conflicts
-unset HIP_VISIBLE_DEVICES
-unset ROCR_VISIBLE_DEVICES
-unset CUDA_VISIBLE_DEVICES
-
-echo "Environment variables before srun:"
-echo "MACHINE=$MACHINE"
-echo "MASTER_ADDR=$MASTER_ADDR"
-echo "MASTER_PORT=$MASTER_PORT"
-echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
-echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
-
-# Print loaded modules for debugging
-module list
-
-# Print LD_LIBRARY_PATH for debugging
-echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-
-# Print ROCM_PATH for debugging
-echo "ROCM_PATH=$ROCM_PATH"
-
 # Run with srun directly - no bash -c wrapper
-# Use explicit GPU mapping for better control
-srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --export=ALL ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
+srun --ntasks=${(SLURM_NNODES*8)} --ntasks-per-node=8 --gpus-per-node=8 \
+  ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
