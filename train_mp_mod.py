@@ -314,8 +314,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         GLOBAL_LOG.info(f"Will check remaining time every {time_check_freq} iterations")
 
     # Get initial FLOP count with a sample input
-    def count_training_flops(model, sample_input, loss_func):
-        flop_counter = FlopCounterMode()
+    def count_training_flops(model, sample_input, loss_func, world_rank):
+        if world_rank == 0:
+            flop_counter = FlopCounterMode(display=True)
+        else:
+            flop_counter = FlopCounterMode(display=False)
+
         with flop_counter:
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 output = model(sample_input)
@@ -325,7 +329,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     sample_input = next(iter(train_data_loader))[0].to(device)
     model.train()
-    flops_per_step = count_training_flops(model, sample_input, loss_func)
+    flops_per_step = count_training_flops(model, sample_input, loss_func, world_rank)
     total_flops = 0
 
     if world_rank == 0:
@@ -485,12 +489,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             samples_per_sec = params["global_batch_size"] * iters_per_sec
             GLOBAL_LOG.info(f'Epoch {epoch} | {iters}/{params.num_iters}')
             GLOBAL_LOG.info(
-                "Time taken for epoch %i is %f sec, avg %f samples/sec",
-                epoch + 1,
-                end - start,
-                samples_per_sec,
+                f"Time taken for epoch {epoch + 1} is {end - start:.6f} sec, avg {samples_per_sec:.6f} samples/sec"
             )
-            GLOBAL_LOG.info("  Avg train loss=%f" % np.mean(tr_loss))
+            GLOBAL_LOG.info(f"  Avg train loss={np.mean(tr_loss):.6f}")
             args.tboard_writer.add_scalar("Loss/train", np.mean(tr_loss), iters)
             args.tboard_writer.add_scalar(
                 "Learning Rate", optimizer.param_groups[0]["lr"], iters
