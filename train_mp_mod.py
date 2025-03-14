@@ -7,11 +7,11 @@ import argparse
 from utils.YParams import YParams
 from utils.logging_utils import GLOBAL_LOG
 import torch
-logging.info(f"PyTorch version: {torch.__version__}")
+GLOBAL_LOG.info(f"PyTorch version: {torch.__version__}")
 if hasattr(torch.version, 'hip'):
-    logging.info(f"PyTorch HIP version: {torch.version.hip}")
-logging.info(f"CUDA available: {torch.cuda.is_available()}")
-logging.info(f"Device count: {torch.cuda.device_count()}")
+    GLOBAL_LOG.info(f"PyTorch HIP version: {torch.version.hip}")
+GLOBAL_LOG.info(f"CUDA available: {torch.cuda.is_available()}")
+GLOBAL_LOG.info(f"Device count: {torch.cuda.device_count()}")
 from utils import get_data_loader_distributed
 from utils import comm
 from utils.loss import l2_loss, l2_loss_opt
@@ -58,7 +58,7 @@ if NVIDIA_AVAILABLE or ROCM_AVAILABLE:
     BFLOAT16_AVAILABLE = torch.cuda.is_bf16_supported()
     device_type = "cuda"
     # from torch.cuda.amp import autocast, GradScaler
-    logging.info(f"bfloat16 support: {BFLOAT16_AVAILABLE}")
+    GLOBAL_LOG.info(f"bfloat16 support: {BFLOAT16_AVAILABLE}")
 else:
     raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
@@ -67,7 +67,7 @@ from torch.utils.flop_counter import FlopCounterMode
 def validate_amp_dtype(requested_dtype):
     """Validate and adjust AMP dtype based on hardware support"""
     if requested_dtype == torch.bfloat16 and not BFLOAT16_AVAILABLE:
-        logging.warning("BFloat16 requested but not supported by hardware. Falling back to FP16")
+        GLOBAL_LOG.warning("BFloat16 requested but not supported by hardware. Falling back to FP16")
         return torch.float16
     return requested_dtype
 
@@ -75,7 +75,7 @@ def validate_amp_dtype(requested_dtype):
 def get_remaining_time():
     """Get remaining time in seconds from SLURM environment variables"""
     if 'SLURM_JOB_ID' not in os.environ:
-        logging.info("Not running in SLURM environment")
+        GLOBAL_LOG.info("Not running in SLURM environment")
         return float('inf')
     
     try:
@@ -90,7 +90,7 @@ def get_remaining_time():
         return remaining
         
     except Exception as e:
-        logging.warning(f"Failed to calculate remaining time: {e}")
+        GLOBAL_LOG.warning(f"Failed to calculate remaining time: {e}")
         return float('inf')
 
 def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
@@ -98,13 +98,13 @@ def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
     try:
         save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
         if world_rank == 0:
-            logging.info("Time limit approaching - saved checkpoint and exiting")
+            GLOBAL_LOG.info("Time limit approaching - saved checkpoint and exiting")
         if params.distributed:
             torch.distributed.barrier()  # Ensure all processes finish saving
             destroy_process_group(None)
         sys.exit(0)
     except Exception as e:
-        logging.error(f"Error during save_and_exit: {e}")
+        GLOBAL_LOG.error(f"Error during save_and_exit: {e}")
         sys.exit(1)
 
 # Get profiler once at module level
@@ -156,10 +156,10 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     if hasattr(params, 'amp_dtype'):
         params.amp_dtype = validate_amp_dtype(params.amp_dtype)
         if world_rank == 0:
-            logging.info(f"Using AMP dtype: {params.amp_dtype}")
+            GLOBAL_LOG.info(f"Using AMP dtype: {params.amp_dtype}")
 
     # Get data loader
-    logging.info("rank %d, begin data loader init" % world_rank)
+    GLOBAL_LOG.info("rank %d, begin data loader init" % world_rank)
     
     train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(
         params, str(TEMP_TRAIN/str(params.n_train)), params.distributed, train=True
@@ -167,11 +167,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     val_data_loader, valid_dataset = get_data_loader_distributed(
         params, str(TEMP_VAL/str(params.n_train)), params.distributed, train=False
     )
-    logging.info("rank %d, data loader initialized" % (world_rank))
+    GLOBAL_LOG.info("rank %d, data loader initialized" % (world_rank))
 
     # Log GPU details
     gpu_info = get_gpu_info(local_rank)
-    logging.info(
+    GLOBAL_LOG.info(
         f"Rank {world_rank}: Using {gpu_info['name']}, "
         f"Total GPU memory: {gpu_info['total_memory']/(1024**3):.2f} GB"
     )
@@ -181,7 +181,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     torch.distributed.all_reduce(test_tensor, op=torch.distributed.ReduceOp.SUM)
     if world_rank == 0:
         expected_sum = (world_size * (world_size - 1)) // 2
-        logging.info(f"Sanity check: Sum of ranks across nodes: {test_tensor.item()} (Expected: {expected_sum})")
+        GLOBAL_LOG.info(f"Sanity check: Sum of ranks across nodes: {test_tensor.item()} (Expected: {expected_sum})")
 
     # create model
     model = vit.ViT(params).to(device)
@@ -194,11 +194,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # weight initialization needs to be synced across shared weights
     if comm.get_size("tp-cp") > 1:
-        logging.info("Init shared weights")
+        GLOBAL_LOG.info("Init shared weights")
         init_params_for_shared_weights(model)
 
     if params.distributed and not args.noddp:
-        logging.info("Init DDP")
+        GLOBAL_LOG.info("Init DDP")
         model = init_ddp_model_and_reduction_hooks(model, device_ids=[local_rank],
                                                    output_device=[local_rank],
                                                    bucket_cap_mb=args.bucket_cap_mb)
@@ -212,10 +212,10 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     if world_rank == 0:
-        logging.info(model)
+        GLOBAL_LOG.info(model)
         gpu_info = get_gpu_info(local_rank)
         all_mem_gb = gpu_info['used_memory'] / (1024.0**3)
-        logging.info(f"Scaffolding memory high watermark: {all_mem_gb:.2f} GB.")
+        GLOBAL_LOG.info(f"Scaffolding memory high watermark: {all_mem_gb:.2f} GB.")
         with open(f'{params.experiment_dir}/hparams.json', 'r') as file:
             data = json.load(file)
         data['parameters'] = param_count
@@ -246,7 +246,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         loss_func = l2_loss
 
     if world_rank == 0:
-        logging.info("Starting Training Loop...")
+        GLOBAL_LOG.info("Starting Training Loop...")
 
     # Log initial loss on train and validation to tensorboard
     with torch.no_grad():
@@ -285,12 +285,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     if not hasattr(params, 'logging_freq'):
         params.logging_freq = 100  # Log every 100 iterations by default
         if world_rank == 0:
-            logging.info(f"Setting default logging frequency to {params.logging_freq}")
+            GLOBAL_LOG.info(f"Setting default logging frequency to {params.logging_freq}")
     
     # Set time check frequency (e.g., every 100 iterations)
     time_check_freq = 100  # Can be adjusted based on your needs
     if world_rank == 0:
-        logging.info(f"Will check remaining time every {time_check_freq} iterations")
+        GLOBAL_LOG.info(f"Will check remaining time every {time_check_freq} iterations")
 
     # Get initial FLOP count with a sample input
     def count_training_flops(model, sample_input, loss_func):
@@ -308,15 +308,15 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     total_flops = 0
 
     if world_rank == 0:
-        logging.info(f"FLOPs per training step: {flops_per_step:,}")
+        GLOBAL_LOG.info(f"FLOPs per training step: {flops_per_step:,}")
 
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):
         if world_rank == 0:
-            logging.info(f"About to synchronize at epoch {epoch} start")
+            GLOBAL_LOG.info(f"About to synchronize at epoch {epoch} start")
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         if world_rank == 0:
-            logging.info(f"Synchronized at epoch {epoch} start")
+            GLOBAL_LOG.info(f"Synchronized at epoch {epoch} start")
         if params.distributed and (train_sampler is not None):
             train_sampler.set_epoch(epoch)
         start = time.time()
@@ -326,14 +326,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         log_time = 0.0
 
         if world_rank == 0:
-            logging.info(f"Training loop started at epoch {epoch}")
+            GLOBAL_LOG.info(f"Training loop started at epoch {epoch}")
         model.train()
         step_count = 0
 
         for i, data in enumerate(train_data_loader, 0):
             if iters >= params.num_iters:
                 if world_rank == 0:
-                    logging.info("Reached maximum iterations, initiating shutdown...")
+                    GLOBAL_LOG.info("Reached maximum iterations, initiating shutdown...")
                 save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
                 
             if world_rank == 0:
@@ -369,7 +369,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             if world_rank == 0 and i == 1:  # print the mem used
                 gpu_info = get_gpu_info(local_rank)
                 all_mem_gb = gpu_info['used_memory'] / (1024.0 * 1024.0 * 1024.0)
-                logging.info(f" Memory usage after forward pass: {all_mem_gb} GB.")
+                GLOBAL_LOG.info(f" Memory usage after forward pass: {all_mem_gb} GB.")
 
             if params.amp_dtype == torch.float16:
                 scaler.scale(loss).backward()
@@ -383,17 +383,17 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 # Replace with timing instrumentation
                 timing_stats = backward_with_comm_timing(loss, optimizer)
                 if world_rank == 0 and iters % params.logging_freq == 0:
-                    logging.info(f"Backward timing: compute={timing_stats['backward_compute_time']:.4f}s, "
+                    GLOBAL_LOG.info(f"Backward timing: compute={timing_stats['backward_compute_time']:.4f}s, "
                                  f"comm={timing_stats['comm_time']:.4f}s, "
                                  f"ratio={timing_stats['comm_ratio']:.2%}")
                     args.tboard_writer.add_scalar("Performance/comm_ratio", timing_stats["comm_ratio"], iters)
 
             if params.distributed:
-                logging.info(f"Rank {world_rank}: About to perform all_reduce operation")
+                GLOBAL_LOG.info(f"Rank {world_rank}: About to perform all_reduce operation")
                 torch.distributed.all_reduce(
                     loss, op=ReduceOp.AVG, group=comm.get_group("dp")
                 )
-                logging.info(f"Rank {world_rank}: All_reduce operation completed")
+                GLOBAL_LOG.info(f"Rank {world_rank}: All_reduce operation completed")
             tr_loss.append(loss.item())
 
             if profiler:
@@ -425,7 +425,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 
                 if patience_counter >= early_stop_patience:
                     if world_rank == 0:
-                        logging.info(f"Early stopping triggered at iteration {iters}")
+                        GLOBAL_LOG.info(f"Early stopping triggered at iteration {iters}")
                     training_time = time.time() - training_start_time
                     return best_val_rmse, peak_memory, training_time
 
@@ -441,21 +441,21 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 
                 if remaining_time.item() < time_buffer:
                     if world_rank == 0:
-                        logging.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
+                        GLOBAL_LOG.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
                     save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
 
             # Optional: Log time and FLOP statistics
             if iters % params.logging_freq == 0:
                 comm_stats = time_communication(comm, device)
                 if world_rank == 0:
-                    logging.info(f"Communication stats: {comm_stats}")
+                    GLOBAL_LOG.info(f"Communication stats: {comm_stats}")
                     args.tboard_writer.add_scalar("Comm/all_reduce_time_ms", comm_stats["all_reduce_time_ms"], iters)
                     args.tboard_writer.add_scalar("Comm/broadcast_time_ms", comm_stats["broadcast_time_ms"], iters)
                     elapsed_time = time.time() - start_time
                     remaining_time = get_remaining_time()
                     hours_remaining = remaining_time / 3600
-                    logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
-                    logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
+                    GLOBAL_LOG.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
+                    GLOBAL_LOG.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
                     
 
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
@@ -464,14 +464,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         if world_rank == 0:
             iters_per_sec = step_count / (end - start)
             samples_per_sec = params["global_batch_size"] * iters_per_sec
-            logging.info(f'Epoch {epoch} | {iters}/{params.num_iters}')
-            logging.info(
+            GLOBAL_LOG.info(f'Epoch {epoch} | {iters}/{params.num_iters}')
+            GLOBAL_LOG.info(
                 "Time taken for epoch %i is %f sec, avg %f samples/sec",
                 epoch + 1,
                 end - start,
                 samples_per_sec,
             )
-            logging.info("  Avg train loss=%f" % np.mean(tr_loss))
+            GLOBAL_LOG.info("  Avg train loss=%f" % np.mean(tr_loss))
             args.tboard_writer.add_scalar("Loss/train", np.mean(tr_loss), iters)
             args.tboard_writer.add_scalar(
                 "Learning Rate", optimizer.param_groups[0]["lr"], iters
@@ -492,8 +492,8 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         if world_rank == 0:
             val_iters_per_sec = valid_steps / (val_end - val_start)
             val_samples_per_sec = params["global_batch_size"] * iters_per_sec
-            logging.info("  Avg val loss={}".format(val_loss.item()))
-            logging.info("  Total validation time: {} sec".format(val_end - val_start))
+            GLOBAL_LOG.info("  Avg val loss={}".format(val_loss.item()))
+            GLOBAL_LOG.info("  Total validation time: {} sec".format(val_end - val_start))
             args.tboard_writer.add_scalar("Loss/valid", val_loss, iters)
             args.tboard_writer.add_scalar("Avg val iters per sec", val_iters_per_sec, iters)
             args.tboard_writer.add_scalar("Avg val samples per sec", val_samples_per_sec, iters)
@@ -527,8 +527,8 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             elapsed_time = time.time() - start_time
             total_flops += flops_per_step
             flops_per_second = total_flops / elapsed_time
-            logging.info(f"Total FLOPs: {total_flops:,}")
-            logging.info(f"FLOPS/second: {flops_per_second:,.2f}")
+            GLOBAL_LOG.info(f"Total FLOPs: {total_flops:,}")
+            GLOBAL_LOG.info(f"FLOPS/second: {flops_per_second:,.2f}")
             args.tboard_writer.add_scalar('Performance/total_flops', total_flops, iters)
             args.tboard_writer.add_scalar('Performance/flops_per_second', flops_per_second, iters)
             args.tboard_writer.flush()
@@ -585,7 +585,7 @@ def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank
             os.remove(latest_path)
         os.symlink(f'checkpoint_{iters}.pt', latest_path)
         
-        logging.info(f"Saved checkpoint at iteration {iters} to {checkpoint_path}")
+        GLOBAL_LOG.info(f"Saved checkpoint at iteration {iters} to {checkpoint_path}")
         
         # Cleanup old checkpoints if needed
         if hasattr(params, 'keep_n_checkpoints'):
@@ -597,11 +597,11 @@ def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank
                 for old_ckpt in checkpoint_files[:-params.keep_n_checkpoints]:
                     try:
                         os.remove(os.path.join(params.experiment_dir, old_ckpt))
-                        logging.info(f"Removed old checkpoint: {old_ckpt}")
+                        GLOBAL_LOG.info(f"Removed old checkpoint: {old_ckpt}")
                     except OSError as e:
-                        logging.warning(f"Failed to remove checkpoint {old_ckpt}: {e}")
+                        GLOBAL_LOG.warning(f"Failed to remove checkpoint {old_ckpt}: {e}")
             except Exception as e:
-                logging.warning(f"Error during checkpoint cleanup: {e}")
+                GLOBAL_LOG.warning(f"Error during checkpoint cleanup: {e}")
 
 def validate_checkpoint_config(checkpoint, params, world_rank):
     """Validate checkpoint configuration matches current setup"""
@@ -628,7 +628,7 @@ def validate_checkpoint_config(checkpoint, params, world_rank):
                     f"doesn't match current config ({current_val})"
                 )
         
-        logging.info("Checkpoint configuration validated successfully")
+        GLOBAL_LOG.info("Checkpoint configuration validated successfully")
 
 def load_checkpoint(model, optimizer, scheduler, params, args, world_rank, local_rank):
     """Load training checkpoint with model parallel support"""
@@ -661,17 +661,17 @@ def load_checkpoint(model, optimizer, scheduler, params, args, world_rank, local
         iters = checkpoint['iters']
         
         if world_rank == 0:
-            logging.info(f"Loaded checkpoint from iteration {iters}")
-            logging.info(f"Training config from checkpoint: {checkpoint['training_config']}")
+            GLOBAL_LOG.info(f"Loaded checkpoint from iteration {iters}")
+            GLOBAL_LOG.info(f"Training config from checkpoint: {checkpoint['training_config']}")
         
         return iters
     else:
         if world_rank == 0:
-            logging.warning(f"No checkpoint found at {checkpoint_path}")
+            GLOBAL_LOG.warning(f"No checkpoint found at {checkpoint_path}")
         return 0
 
 if __name__ == "__main__":
-    logging.info(f"MACHINE={os.getenv('MACHINE')}")
+    GLOBAL_LOG.info(f"MACHINE={os.getenv('MACHINE')}")
     parser = argparse.ArgumentParser()
     parser.add_argument("--run_num", default="00", type=str, help="tag for indexing the current experiment",)
     parser.add_argument("--scale_depth", type=int, default=1.0, help="Scaling factor for number of transformer layers")
@@ -773,18 +773,17 @@ if __name__ == "__main__":
     params.distributed = world_size > 1
     
     # Create a rank-aware logger
-    log = RankLogger(world_rank)
-    log.info(f"Initialized with world_size={world_size}, world_rank={world_rank}, local_rank={local_rank}")
-    log.info(f"CUDA available: {torch.cuda.is_available()}")
-    log.info(f"Device count: {torch.cuda.device_count()}")
+    GLOBAL_LOG.info(f"Initialized with world_size={world_size}, world_rank={world_rank}, local_rank={local_rank}")
+    GLOBAL_LOG.info(f"CUDA available: {torch.cuda.is_available()}")
+    GLOBAL_LOG.info(f"Device count: {torch.cuda.device_count()}")
     
     # Log environment variables
-    log.info(f"Environment variables:")
-    log.info(f"  HIP_VISIBLE_DEVICES: {os.environ.get('HIP_VISIBLE_DEVICES')}")
-    log.info(f"  ROCR_VISIBLE_DEVICES: {os.environ.get('ROCR_VISIBLE_DEVICES')}")
-    log.info(f"  CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
-    log.info(f"  SLURM_LOCALID: {os.environ.get('SLURM_LOCALID')}")
-    log.info(f"  SLURM_PROCID: {os.environ.get('SLURM_PROCID')}")
+    GLOBAL_LOG.info(f"Environment variables:")
+    GLOBAL_LOG.info(f"  HIP_VISIBLE_DEVICES: {os.environ.get('HIP_VISIBLE_DEVICES')}")
+    GLOBAL_LOG.info(f"  ROCR_VISIBLE_DEVICES: {os.environ.get('ROCR_VISIBLE_DEVICES')}")
+    GLOBAL_LOG.info(f"  CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
+    GLOBAL_LOG.info(f"  SLURM_LOCALID: {os.environ.get('SLURM_LOCALID')}")
+    GLOBAL_LOG.info(f"  SLURM_PROCID: {os.environ.get('SLURM_PROCID')}")
 
     initialize_gpu_backend()
     if args.local_batch_size:
@@ -827,9 +826,7 @@ if __name__ == "__main__":
         params.train_data_path = str(TEMP_TRAIN/str(params.n_train))
         params.valid_data_path = str(TEMP_VAL/str(params.n_train))
         
-        logging_utils.log_to_file(
-            logger_name=None, log_filename=os.path.join(expDir, "out.log")
-        )
+        GLOBAL_LOG.log_to_file(log_filename=os.path.join(expDir, "out.log"))
         params.log()
         args.tboard_writer = SummaryWriter(log_dir=os.path.join(str(expDir), "logs/"))
         
@@ -848,10 +845,10 @@ if __name__ == "__main__":
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
 
-    log.info(f"MASTER_PORT={os.environ.get('MASTER_PORT')}, MASTER_ADDR={os.environ.get('MASTER_ADDR')}")
+    GLOBAL_LOG.info(f"MASTER_PORT={os.environ.get('MASTER_PORT')}, MASTER_ADDR={os.environ.get('MASTER_ADDR')}")
 
     train(params, args, local_rank, world_rank, world_size)
     
     if params.distributed:
         torch.distributed.barrier()
-    log.info("DONE")
+    GLOBAL_LOG.info("DONE")
