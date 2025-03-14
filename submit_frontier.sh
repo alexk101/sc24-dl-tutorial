@@ -8,6 +8,7 @@
 #SBATCH -o %x-%j.out
 #SBATCH --gpus-per-node=8
 #SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
+#SBATCH --gpu-bind=closest
 
 # Handle SLURM signals
 # These are used to handle the time limit and checkpointing

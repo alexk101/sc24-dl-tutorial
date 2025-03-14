@@ -11,12 +11,11 @@ from distributed.helpers import init_params_for_shared_weights
 
 # Set environment variables for Frontier MI250X GPUs
 GLOBAL_LOG.info("Running on Frontier - setting GPU visibility for all processes")
-os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-GLOBAL_LOG.info(f"CUDA_VISIBLE_DEVICES: {os.environ['CUDA_VISIBLE_DEVICES']}")
-GLOBAL_LOG.info(f"HIP_VISIBLE_DEVICES: {os.environ['HIP_VISIBLE_DEVICES']}")
-GLOBAL_LOG.info(f"ROCR_VISIBLE_DEVICES: {os.environ['ROCR_VISIBLE_DEVICES']}")
+slurm_localid = os.environ.get("SLURM_LOCALID", "0")
+os.environ["HIP_VISIBLE_DEVICES"] = slurm_localid
+os.environ["ROCR_VISIBLE_DEVICES"] = slurm_localid
+GLOBAL_LOG.info(f"Set GPU visibility for rank {os.environ.get('SLURM_PROCID', 'unknown')}, " 
+                f"local_id={slurm_localid}, visible_devices={os.environ['HIP_VISIBLE_DEVICES']}")
 
 # Import torch early to ensure GPU detection works properly
 GLOBAL_LOG.info(f"PyTorch version: {torch.__version__}")
@@ -84,6 +83,9 @@ else:
     raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
 from torch.utils.flop_counter import FlopCounterMode
+
+# Add near the top of the file, after importing torch
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 def validate_amp_dtype(requested_dtype):
     """Validate and adjust AMP dtype based on hardware support"""
@@ -427,11 +429,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             if profiler:
                 profiler.range_pop()  # step
             # lr step
-            try:
-                scheduler.step()
-            except Exception as e:
-                GLOBAL_LOG.error(f"Error during scheduler.step() at iteration {iters}: {e}")
-                # Continue execution rather than hanging
+            if scheduler is not None:
+                try:
+                    scheduler.step()
+                    GLOBAL_LOG.info(f"Scheduler step complete for iteration {iters}")
+                except Exception as e:
+                    GLOBAL_LOG.error(f"Error during scheduler.step() at iteration {iters}: {e}")
+            else:
+                GLOBAL_LOG.info(f"No scheduler to step for iteration {iters}")
 
             tr_end = time.time()
             tr_time += tr_end - tr_start
@@ -504,6 +509,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             step_count += 1
             iters += 1
+
+            # Add this check to ensure all ranks move to the next iteration
+            if params.distributed:
+                try:
+                    torch.distributed.barrier(group=comm.get_group("dp"))
+                    GLOBAL_LOG.info(f"Synchronized all ranks after iteration {iters-1}")
+                except Exception as e:
+                    GLOBAL_LOG.error(f"Error during barrier after iteration {iters-1}: {e}")
 
             # And this after data loading
             GLOBAL_LOG.info(f"Completed data loading for iteration {iters}")
