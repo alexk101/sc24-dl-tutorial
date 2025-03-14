@@ -7,6 +7,26 @@ import time
 import numpy as np
 import argparse
 from utils.YParams import YParams
+
+# Set environment variables for Frontier MI250X GPUs
+# Make all GPUs visible to all processes
+if os.environ.get("MACHINE") == "frontier":
+    logging.info("Running on Frontier - setting GPU visibility for all processes")
+    if os.environ.get("HIP_VISIBLE_DEVICES") is None:
+        logging.info("HIP_VISIBLE_DEVICES is not set, setting to 0,1,2,3,4,5,6,7")
+        os.environ["HIP_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+    if os.environ.get("ROCR_VISIBLE_DEVICES") is None:
+        logging.info("ROCR_VISIBLE_DEVICES is not set, setting to 0,1,2,3,4,5,6,7")
+        os.environ["ROCR_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+
+# Import torch early to ensure GPU detection works properly
+import torch
+logging.info(f"PyTorch version: {torch.__version__}")
+if hasattr(torch.version, 'hip'):
+    logging.info(f"PyTorch HIP version: {torch.version.hip}")
+logging.info(f"CUDA available: {torch.cuda.is_available()}")
+logging.info(f"Device count: {torch.cuda.device_count()}")
+
 # Now import the rest of the modules
 from utils import get_data_loader_distributed
 from utils import comm
@@ -31,12 +51,13 @@ from torch.distributed import ReduceOp, destroy_process_group
 from torch.amp import autocast, GradScaler
 
 # GPU vendor-specific imports
-import torch
 from utils.gpu_utils import (
     NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND, 
     get_gpu_info, initialize_gpu, get_profiler, log_rocm_utilization, initialize_gpu_backend
 )
 
+# Initialize GPU backend
+initialize_gpu_backend()
 
 # Check for bfloat16 support
 BFLOAT16_AVAILABLE = False
