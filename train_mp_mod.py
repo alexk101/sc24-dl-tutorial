@@ -414,11 +414,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     args.tboard_writer.add_scalar("Performance/comm_ratio", timing_stats["comm_ratio"], iters)
 
             if params.distributed:
-                GLOBAL_LOG.info(f"rank {world_rank}, callingall reduce")
+                GLOBAL_LOG.info(f"calling all reduce {iters}/{epoch}")
                 torch.distributed.all_reduce(
                     loss, op=ReduceOp.AVG, group=comm.get_group("dp")
                 )
-                GLOBAL_LOG.info(f"rank {world_rank}, all reduce complete")
+                GLOBAL_LOG.info(f"all reduce complete {iters}/{epoch}")
             tr_loss.append(loss.item())
 
             if profiler:
@@ -462,8 +462,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     remaining_time = torch.tensor(0.0, device=device)
                     
                 if params.distributed:
+                    GLOBAL_LOG.info(f"broadcasting remaining time {iters}/{epoch}")
                     torch.distributed.broadcast(remaining_time, src=0)
-                
+                    GLOBAL_LOG.info(f"broadcast complete {iters}/{epoch}")
                 if remaining_time.item() < time_buffer:
                     if world_rank == 0:
                         GLOBAL_LOG.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
@@ -480,11 +481,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     hours_remaining = remaining_time / 3600
                     GLOBAL_LOG.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
                     GLOBAL_LOG.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
-                    
+                    GLOBAL_LOG.info(f"remaining time {remaining_time}")
 
+        GLOBAL_LOG.info(f"synchronizing at end of epoch {epoch}")
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
-
+        GLOBAL_LOG.info(f"synchronize complete at end of epoch {epoch}")
         if world_rank == 0:
             iters_per_sec = step_count / (end - start)
             samples_per_sec = params["global_batch_size"] * iters_per_sec
