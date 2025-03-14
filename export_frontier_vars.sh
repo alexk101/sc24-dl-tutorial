@@ -16,9 +16,8 @@ export SCRATCH=/lustre/orion/geo163/scratch/kiefera
 export MACHINE=frontier
 
 # Add these environment variables before source export_DDP_vars.sh
-# Uncomment for detailed debugging
-# export NCCL_DEBUG=INFO
-export NCCL_DEBUG=WARN
+# export NCCL_DEBUG=INFO # For debugging network issues
+# export NCCL_DEBUG=WARN # For debugging network issues, less verbose
 
 # Use job-specific temporary directory for NCCL
 export NCCL_TEMP_DIR="/tmp/nccl-${SLURM_JOB_ID}"
@@ -49,15 +48,8 @@ export MASTER_PORT=3442  # PyTorch's default port
 export HSA_ENABLE_SDMA=0
 export FI_CXI_RX_MATCH_MODE=hybrid
 
-# Important: Let SLURM handle GPU visibility
-# DO NOT set global HIP_VISIBLE_DEVICES or ROCR_VISIBLE_DEVICES here
-# Each process will set these based on SLURM_LOCALID in the Python script
-
-# Print GPU-related environment variables for debugging
-echo "GPU Environment Variables:"
-echo "SLURM_LOCALID: $SLURM_LOCALID"
-echo "SLURM_PROCID: $SLURM_PROCID"
-echo "SLURM_NODEID: $SLURM_NODEID"
-echo "Current HIP_VISIBLE_DEVICES: $HIP_VISIBLE_DEVICES"
-echo "Current ROCR_VISIBLE_DEVICES: $ROCR_VISIBLE_DEVICES"
+# Make all GPUs visible to all processes - critical for Frontier MI250X GPUs
+# This ensures PyTorch can detect all GPUs properly
+# export HIP_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+# export ROCR_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 

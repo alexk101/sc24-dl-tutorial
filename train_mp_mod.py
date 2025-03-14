@@ -1,75 +1,17 @@
 import logging
 import os
-from utils import logging_utils
-logging_utils.config_logger()
 import sys
 import time
 import numpy as np
 import argparse
 from utils.YParams import YParams
-
-# Custom logger that includes rank
-class RankLogger:
-    def __init__(self, rank):
-        self.rank = rank
-        self.logger = logging.getLogger()
-        
-    def info(self, msg):
-        self.logger.info(f"Rank {self.rank}: {msg}")
-        
-    def error(self, msg):
-        self.logger.error(f"Rank {self.rank}: {msg}")
-        
-    def warning(self, msg):
-        self.logger.warning(f"Rank {self.rank}: {msg}")
-
-# Log initial environment variables
-initial_hip = os.environ.get("HIP_VISIBLE_DEVICES")
-initial_rocr = os.environ.get("ROCR_VISIBLE_DEVICES")
-initial_cuda = os.environ.get("CUDA_VISIBLE_DEVICES")
-initial_slurm_localid = os.environ.get("SLURM_LOCALID")
-
-# Set environment variables for Frontier MI250X GPUs
-# Make all GPUs visible to all processes
-
-logging.info("Running on Frontier - setting GPU visibility for all processes")
-
-# Log current environment variable values
-hip_devices = os.environ.get("HIP_VISIBLE_DEVICES")
-rocr_devices = os.environ.get("ROCR_VISIBLE_DEVICES")
-cuda_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
-slurm_localid = os.environ.get("SLURM_LOCALID")
-
-logging.info(f"Current HIP_VISIBLE_DEVICES: {hip_devices}")
-logging.info(f"Current ROCR_VISIBLE_DEVICES: {rocr_devices}")
-logging.info(f"Current CUDA_VISIBLE_DEVICES: {cuda_devices}")
-logging.info(f"SLURM_LOCALID: {slurm_localid}")
-
-# Use SLURM_LOCALID to set GPU visibility - this is what worked in test_distributed
-if slurm_localid is not None:
-    logging.info(f"Setting HIP_VISIBLE_DEVICES and ROCR_VISIBLE_DEVICES to SLURM_LOCALID: {slurm_localid}")
-    os.environ["HIP_VISIBLE_DEVICES"] = slurm_localid
-    os.environ["ROCR_VISIBLE_DEVICES"] = slurm_localid
-    
-    # Also set CUDA_VISIBLE_DEVICES for compatibility
-    os.environ["CUDA_VISIBLE_DEVICES"] = slurm_localid
-    
-    # Double-check that the variables were set correctly
-    logging.info(f"After setting: HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}, "
-                 f"ROCR_VISIBLE_DEVICES={os.environ.get('ROCR_VISIBLE_DEVICES')}")
-else:
-    raise RuntimeError("SLURM_LOCALID is not set")
-        
-
-# Import torch early to ensure GPU detection works properly
+from utils.logging_utils import GLOBAL_LOG
 import torch
 logging.info(f"PyTorch version: {torch.__version__}")
 if hasattr(torch.version, 'hip'):
     logging.info(f"PyTorch HIP version: {torch.version.hip}")
 logging.info(f"CUDA available: {torch.cuda.is_available()}")
 logging.info(f"Device count: {torch.cuda.device_count()}")
-
-# Now import the rest of the modules
 from utils import get_data_loader_distributed
 from utils import comm
 from utils.loss import l2_loss, l2_loss_opt
@@ -91,6 +33,14 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import ReduceOp, destroy_process_group
 from torch.amp import autocast, GradScaler
+
+GLOBAL_LOG.info("Running on Frontier - setting GPU visibility for all processes")
+os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+GLOBAL_LOG.info(f"CUDA_VISIBLE_DEVICES: {os.environ['CUDA_VISIBLE_DEVICES']}")
+GLOBAL_LOG.info(f"HIP_VISIBLE_DEVICES: {os.environ['HIP_VISIBLE_DEVICES']}")
+GLOBAL_LOG.info(f"ROCR_VISIBLE_DEVICES: {os.environ['ROCR_VISIBLE_DEVICES']}")
 
 # GPU vendor-specific imports
 from utils.gpu_utils import (

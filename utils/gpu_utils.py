@@ -3,48 +3,15 @@ import logging
 import os
 import sys
 import subprocess
-
+from utils.logging_utils import GLOBAL_LOG
 NVIDIA_AVAILABLE = False
 ROCM_AVAILABLE = False
 GPU_BACKEND = None
 
-# Custom logger that includes rank
-class RankLogger:
-    def __init__(self, rank):
-        self.rank = rank
-        self.logger = logging.getLogger()
-        
-    def info(self, msg):
-        self.logger.info(f"Rank {self.rank}: {msg}")
-        
-    def error(self, msg):
-        self.logger.error(f"Rank {self.rank}: {msg}")
-        
-    def warning(self, msg):
-        self.logger.warning(f"Rank {self.rank}: {msg}")
-
-def get_rank():
-    """Get the current process rank"""
-    try:
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        return comm.Get_rank()
-    except:
-        return int(os.environ.get("SLURM_PROCID", os.environ.get("RANK", "0")))
-
 def get_gpu_backend():
     """Returns the available GPU backend ('cuda' or 'rocm') or raises RuntimeError"""
     # Create a rank-aware logger
-    rank = get_rank()
-    log = RankLogger(rank)
-    
-    # Log environment variables for debugging
-    if os.environ.get("MACHINE") == "frontier":
-        hip_devices = os.environ.get("HIP_VISIBLE_DEVICES")
-        rocr_devices = os.environ.get("ROCR_VISIBLE_DEVICES")
-        slurm_localid = os.environ.get("SLURM_LOCALID")
-        log.info(f"HIP_VISIBLE_DEVICES={hip_devices}, ROCR_VISIBLE_DEVICES={rocr_devices}, SLURM_LOCALID={slurm_localid}")
-    
+    log = GLOBAL_LOG
     # Let PyTorch be the source of truth
     if torch.cuda.is_available():
         # Check if we're using ROCm by looking for HIP in the PyTorch build info
@@ -64,8 +31,7 @@ def initialize_gpu_backend():
     global NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND
     
     # Create a rank-aware logger
-    rank = get_rank()
-    log = RankLogger(rank)
+    log = GLOBAL_LOG
     
     try:
         GPU_BACKEND = get_gpu_backend()
@@ -89,8 +55,7 @@ def log_rocm_utilization():
 def get_gpu_info(device_index):
     """Get GPU information in a vendor-agnostic way"""
     # Create a rank-aware logger
-    rank = get_rank()
-    log = RankLogger(rank)
+    log = GLOBAL_LOG
     
     # Import appropriate GPU monitoring tools
     if NVIDIA_AVAILABLE:
@@ -125,8 +90,7 @@ def get_gpu_info(device_index):
 def initialize_gpu(local_rank):
     """Initialize GPU in a vendor-agnostic way"""
     # Create a rank-aware logger
-    rank = get_rank()
-    log = RankLogger(rank)
+    log = GLOBAL_LOG
     
     # Check visible devices
     hip_visible = os.environ.get("HIP_VISIBLE_DEVICES", "")
