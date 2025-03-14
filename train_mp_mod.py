@@ -16,27 +16,37 @@ if os.environ.get("MACHINE") == "frontier":
     # Log current environment variable values
     hip_devices = os.environ.get("HIP_VISIBLE_DEVICES")
     rocr_devices = os.environ.get("ROCR_VISIBLE_DEVICES")
+    slurm_localid = os.environ.get("SLURM_LOCALID")
+    
     logging.info(f"Current HIP_VISIBLE_DEVICES: {hip_devices}")
     logging.info(f"Current ROCR_VISIBLE_DEVICES: {rocr_devices}")
+    logging.info(f"SLURM_LOCALID: {slurm_localid}")
     
-    # Set both to the same value or don't set them at all
-    if hip_devices is not None and rocr_devices is None:
-        logging.info("Setting ROCR_VISIBLE_DEVICES to match HIP_VISIBLE_DEVICES")
-        os.environ["ROCR_VISIBLE_DEVICES"] = hip_devices
-    elif rocr_devices is not None and hip_devices is None:
-        logging.info("Setting HIP_VISIBLE_DEVICES to match ROCR_VISIBLE_DEVICES")
-        os.environ["HIP_VISIBLE_DEVICES"] = rocr_devices
-    elif hip_devices is None and rocr_devices is None:
-        # If neither is set, set both to all GPUs
-        logging.info("Neither HIP_VISIBLE_DEVICES nor ROCR_VISIBLE_DEVICES is set, setting both to 0,1,2,3,4,5,6,7")
-        os.environ["HIP_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
-        os.environ["ROCR_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+    # Use SLURM_LOCALID to set GPU visibility - this is what worked in test_distributed
+    if slurm_localid is not None:
+        logging.info(f"Setting HIP_VISIBLE_DEVICES and ROCR_VISIBLE_DEVICES to SLURM_LOCALID: {slurm_localid}")
+        os.environ["HIP_VISIBLE_DEVICES"] = slurm_localid
+        os.environ["ROCR_VISIBLE_DEVICES"] = slurm_localid
     else:
-        # Both are set but might be different
-        if hip_devices != rocr_devices:
-            logging.warning(f"HIP_VISIBLE_DEVICES ({hip_devices}) and ROCR_VISIBLE_DEVICES ({rocr_devices}) are different")
-            logging.info("Setting both to the same value (using ROCR_VISIBLE_DEVICES)")
+        logging.warning("SLURM_LOCALID is not set, falling back to default behavior")
+        # If neither is set, set both to all GPUs
+        if hip_devices is None and rocr_devices is None:
+            logging.info("Neither HIP_VISIBLE_DEVICES nor ROCR_VISIBLE_DEVICES is set, setting both to 0,1,2,3,4,5,6,7")
+            os.environ["HIP_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+            os.environ["ROCR_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+        # If one is set but not the other, set both to the same value
+        elif hip_devices is not None and rocr_devices is None:
+            logging.info("Setting ROCR_VISIBLE_DEVICES to match HIP_VISIBLE_DEVICES")
+            os.environ["ROCR_VISIBLE_DEVICES"] = hip_devices
+        elif rocr_devices is not None and hip_devices is None:
+            logging.info("Setting HIP_VISIBLE_DEVICES to match ROCR_VISIBLE_DEVICES")
             os.environ["HIP_VISIBLE_DEVICES"] = rocr_devices
+        # If both are set but different, set both to the same value
+        elif hip_devices != rocr_devices:
+            logging.warning(f"HIP_VISIBLE_DEVICES ({hip_devices}) and ROCR_VISIBLE_DEVICES ({rocr_devices}) are different")
+            logging.info("Setting both to all GPUs")
+            os.environ["HIP_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+            os.environ["ROCR_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 
 # Import torch early to ensure GPU detection works properly
 import torch

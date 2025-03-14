@@ -10,6 +10,13 @@ GPU_BACKEND = None
 
 def get_gpu_backend():
     """Returns the available GPU backend ('cuda' or 'rocm') or raises RuntimeError"""
+    # Special case for Frontier - force ROCm backend
+    if os.environ.get("MACHINE") == "frontier":
+        hip_devices = os.environ.get("HIP_VISIBLE_DEVICES")
+        rocr_devices = os.environ.get("ROCR_VISIBLE_DEVICES")
+        slurm_localid = os.environ.get("SLURM_LOCALID")
+        logging.info(f"HIP_VISIBLE_DEVICES={hip_devices}, ROCR_VISIBLE_DEVICES={rocr_devices}, SLURM_LOCALID={slurm_localid}")
+    # Standard detection for other systems
     if torch.cuda.is_available():
         # Check if we're using ROCm by looking for HIP in the PyTorch build info
         if torch.version.hip is not None:

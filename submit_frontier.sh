@@ -49,7 +49,17 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 # Command line arguments
 args="${@}"
 
+# IMPORTANT: Do NOT set HIP_VISIBLE_DEVICES or ROCR_VISIBLE_DEVICES here
+# Let each process set them based on SLURM_LOCALID
+
+# Log environment variables for debugging
+echo "Environment variables before srun:"
+echo "MACHINE=$MACHINE"
+echo "MASTER_ADDR=$MASTER_ADDR"
+echo "MASTER_PORT=$MASTER_PORT"
+echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
+echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
+
 # Run with srun directly - no bash -c wrapper
-# IMPORTANT: Do NOT set CUDA_VISIBLE_DEVICES, HIP_VISIBLE_DEVICES, or ROCR_VISIBLE_DEVICES
-# to allow all processes to see all GPUs
-srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
+# IMPORTANT: Use --gpu-bind=closest to ensure each process gets the correct GPU
+srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
