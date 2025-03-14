@@ -12,12 +12,31 @@ from utils.YParams import YParams
 # Make all GPUs visible to all processes
 if os.environ.get("MACHINE") == "frontier":
     logging.info("Running on Frontier - setting GPU visibility for all processes")
-    if os.environ.get("HIP_VISIBLE_DEVICES") is None:
-        logging.info("HIP_VISIBLE_DEVICES is not set, setting to 0,1,2,3,4,5,6,7")
+    
+    # Log current environment variable values
+    hip_devices = os.environ.get("HIP_VISIBLE_DEVICES")
+    rocr_devices = os.environ.get("ROCR_VISIBLE_DEVICES")
+    logging.info(f"Current HIP_VISIBLE_DEVICES: {hip_devices}")
+    logging.info(f"Current ROCR_VISIBLE_DEVICES: {rocr_devices}")
+    
+    # Set both to the same value or don't set them at all
+    if hip_devices is not None and rocr_devices is None:
+        logging.info("Setting ROCR_VISIBLE_DEVICES to match HIP_VISIBLE_DEVICES")
+        os.environ["ROCR_VISIBLE_DEVICES"] = hip_devices
+    elif rocr_devices is not None and hip_devices is None:
+        logging.info("Setting HIP_VISIBLE_DEVICES to match ROCR_VISIBLE_DEVICES")
+        os.environ["HIP_VISIBLE_DEVICES"] = rocr_devices
+    elif hip_devices is None and rocr_devices is None:
+        # If neither is set, set both to all GPUs
+        logging.info("Neither HIP_VISIBLE_DEVICES nor ROCR_VISIBLE_DEVICES is set, setting both to 0,1,2,3,4,5,6,7")
         os.environ["HIP_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
-    if os.environ.get("ROCR_VISIBLE_DEVICES") is None:
-        logging.info("ROCR_VISIBLE_DEVICES is not set, setting to 0,1,2,3,4,5,6,7")
         os.environ["ROCR_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+    else:
+        # Both are set but might be different
+        if hip_devices != rocr_devices:
+            logging.warning(f"HIP_VISIBLE_DEVICES ({hip_devices}) and ROCR_VISIBLE_DEVICES ({rocr_devices}) are different")
+            logging.info("Setting both to the same value (using ROCR_VISIBLE_DEVICES)")
+            os.environ["HIP_VISIBLE_DEVICES"] = rocr_devices
 
 # Import torch early to ensure GPU detection works properly
 import torch
