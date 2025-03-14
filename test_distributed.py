@@ -29,6 +29,9 @@ class RankLogger:
     def error(self, msg):
         self.logger.error(msg, extra={'rank': self.rank})
 
+# Create a global rank logger for early logging
+global_log = RankLogger(os.environ.get("SLURM_PROCID", "?"))
+
 # Let SLURM set the GPU assignment
 os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
 # For ROCm
@@ -41,27 +44,28 @@ def main():
     cuda_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
     slurm_localid = os.environ.get("SLURM_LOCALID")
     
-    logging.info(f"Current HIP_VISIBLE_DEVICES: {hip_devices}")
-    logging.info(f"Current ROCR_VISIBLE_DEVICES: {rocr_devices}")
-    logging.info(f"Current CUDA_VISIBLE_DEVICES: {cuda_devices}")
-    logging.info(f"SLURM_LOCALID: {slurm_localid}")
     # Get environment variables
     try:
-        num_gpus_per_node = torch.cuda.device_count()
         comm = MPI.COMM_WORLD
         world_size = comm.Get_size()
         global_rank = rank = comm.Get_rank()
+        
+        # Create logger with rank
+        log = RankLogger(rank)
+        
+        # Log environment variables using the rank logger
+        log.info(f"Current HIP_VISIBLE_DEVICES: {hip_devices}")
+        log.info(f"Current ROCR_VISIBLE_DEVICES: {rocr_devices}")
+        log.info(f"Current CUDA_VISIBLE_DEVICES: {cuda_devices}")
+        log.info(f"SLURM_LOCALID: {slurm_localid}")
+        
+        num_gpus_per_node = torch.cuda.device_count()
         local_rank = int(rank) % int(num_gpus_per_node) # local_rank and device are 0 when using 1 GPU per task
         master_addr = os.environ["MASTER_ADDR"]
         master_port = os.environ["MASTER_PORT"]
-
-
     except KeyError as e:
-        print(f"Missing environment variable: {e}")
+        log.error(f"Missing environment variable: {e}")
         sys.exit(1)
-    
-    # Create logger with rank
-    log = RankLogger(rank)
     
     # Log environment variables
     log.info(f"Environment: RANK={rank}, LOCAL_RANK={local_rank}, WORLD_SIZE={world_size}")
