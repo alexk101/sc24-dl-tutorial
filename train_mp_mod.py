@@ -6,6 +6,9 @@ import numpy as np
 import argparse
 from utils.YParams import YParams
 from utils.logging_utils import GLOBAL_LOG
+import torch
+from distributed.mappings import init_ddp_model_and_reduction_hooks
+from distributed.helpers import init_params_for_shared_weights
 
 # Set environment variables for Frontier MI250X GPUs
 GLOBAL_LOG.info("Running on Frontier - setting GPU visibility for all processes")
@@ -17,7 +20,6 @@ GLOBAL_LOG.info(f"HIP_VISIBLE_DEVICES: {os.environ['HIP_VISIBLE_DEVICES']}")
 GLOBAL_LOG.info(f"ROCR_VISIBLE_DEVICES: {os.environ['ROCR_VISIBLE_DEVICES']}")
 
 # Import torch early to ensure GPU detection works properly
-import torch
 GLOBAL_LOG.info(f"PyTorch version: {torch.__version__}")
 if hasattr(torch.version, 'hip'):
     GLOBAL_LOG.info(f"PyTorch HIP version: {torch.version.hip}")
@@ -31,11 +33,7 @@ from utils.gpu_utils import (
 
 # Initialize GPU backend - this sets NVIDIA_AVAILABLE and ROCM_AVAILABLE
 GLOBAL_LOG.info("Initializing GPU backend...")
-initialize_gpu_backend()
-
-# Import these AFTER initialize_gpu_backend has been called
-from utils.gpu_utils import NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND
-
+GPU_BACKEND, NVIDIA_AVAILABLE, ROCM_AVAILABLE = initialize_gpu_backend()
 GLOBAL_LOG.info(f"After initialization: NVIDIA_AVAILABLE={NVIDIA_AVAILABLE}, ROCM_AVAILABLE={ROCM_AVAILABLE}, GPU_BACKEND={GPU_BACKEND}")
 
 # Try to create a test tensor on the GPU to verify it's working
@@ -56,8 +54,7 @@ from utils.metrics import weighted_rmse, time_communication, backward_with_comm_
 from utils.data import data_subset, clean_up_temp_dirs, TEMP_TRAIN, TEMP_VAL, SCRATCH
 from networks import vit
 
-from distributed.mappings import init_ddp_model_and_reduction_hooks
-from distributed.helpers import init_params_for_shared_weights
+
 
 from utils.plots import generate_images, calculate_layerwise_stdv, save_stdv_values, log_stdv_image
 from pathlib import Path
