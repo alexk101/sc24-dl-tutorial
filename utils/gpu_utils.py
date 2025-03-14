@@ -89,7 +89,7 @@ def get_gpu_info(device_index):
 
 
 def initialize_gpu(local_rank):
-    """Initialize GPU in a vendor-agnostic way"""
+    """Initialize GPU in a vendor-agnostic way for Frontier's MI250X GPUs"""
     # Create a rank-aware logger
     log = GLOBAL_LOG
     
@@ -121,19 +121,24 @@ def initialize_gpu(local_rank):
         log.error("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
         raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
     
-    log.info(f"Attaching GPU {device_id}")
-    torch.cuda.set_device(device_id)
-    device = torch.device(f"cuda:{device_id}")
+    # On Frontier with SLURM, each process only sees one GPU as device 0
+    # regardless of the actual GPU ID assigned by SLURM
+    cuda_device_id = 0
+    log.info(f"Attaching to GPU {device_id} (CUDA device index: {cuda_device_id})")
+    
+    torch.cuda.set_device(cuda_device_id)
+    device = torch.device(f"cuda:{cuda_device_id}")
     
     # Log device properties
     try:
-        props = torch.cuda.get_device_properties(device_id)
+        props = torch.cuda.get_device_properties(cuda_device_id)
         log.info(f"Using device: {props.name}, Total memory: {props.total_memory/(1024**3):.2f} GB")
     except Exception as e:
         log.warning(f"Could not get device properties: {e}")
     
     log.info(f"Initialized GPU {device_id} on device {device}")
     
+    # For monitoring tools, we use the actual device_id (from SLURM)
     if NVIDIA_AVAILABLE:
         try:
             import pynvml

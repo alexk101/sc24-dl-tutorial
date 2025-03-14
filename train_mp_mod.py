@@ -37,10 +37,11 @@ GLOBAL_LOG.info(f"After initialization: NVIDIA_AVAILABLE={NVIDIA_AVAILABLE}, ROC
 
 # Try to create a test tensor on the GPU to verify it's working
 try:
-    device_id = int(os.environ.get("SLURM_LOCALID", "0"))
-    torch.cuda.set_device(device_id)
-    test_tensor = torch.zeros(1, device=f"cuda:{device_id}")
-    GLOBAL_LOG.info(f"Successfully created test tensor on GPU {device_id}")
+    # On Frontier, each process only sees one GPU (device 0) due to SLURM binding
+    frontier_device_id = 0
+    torch.cuda.set_device(frontier_device_id)
+    test_tensor = torch.zeros(1, device=f"cuda:{frontier_device_id}")
+    GLOBAL_LOG.info(f"Successfully created test tensor on GPU {os.environ.get('SLURM_LOCALID', '0')}")
 except Exception as e:
     GLOBAL_LOG.error(f"Failed to create test tensor on GPU: {e}")
     sys.exit(1)
