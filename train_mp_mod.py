@@ -29,7 +29,13 @@ if os.environ.get("MACHINE") == "frontier":
         logging.info(f"Setting HIP_VISIBLE_DEVICES and ROCR_VISIBLE_DEVICES to SLURM_LOCALID: {slurm_localid}")
         os.environ["HIP_VISIBLE_DEVICES"] = slurm_localid
         os.environ["ROCR_VISIBLE_DEVICES"] = slurm_localid
+        
+        # Also set CUDA_VISIBLE_DEVICES for compatibility
         os.environ["CUDA_VISIBLE_DEVICES"] = slurm_localid
+        
+        # Double-check that the variables were set correctly
+        logging.info(f"After setting: HIP_VISIBLE_DEVICES={os.environ.get('HIP_VISIBLE_DEVICES')}, "
+                     f"ROCR_VISIBLE_DEVICES={os.environ.get('ROCR_VISIBLE_DEVICES')}")
     else:
         raise RuntimeError("SLURM_LOCALID is not set")
         

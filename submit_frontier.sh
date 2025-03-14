@@ -60,6 +60,15 @@ echo "MASTER_PORT=$MASTER_PORT"
 echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
 echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
 
+# IMPORTANT: Unset any global GPU visibility variables to avoid conflicts
+unset HIP_VISIBLE_DEVICES
+unset ROCR_VISIBLE_DEVICES
+unset CUDA_VISIBLE_DEVICES
+
+echo "After unsetting:"
+echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
+echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
+
 # Run with srun directly - no bash -c wrapper
-# IMPORTANT: Use --gpu-bind=closest to ensure each process gets the correct GPU
-srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=closest ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
+# Use explicit GPU mapping instead of closest
+srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=map_gpu:0,1,2,3,4,5,6,7 --export=ALL ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}

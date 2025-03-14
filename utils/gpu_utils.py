@@ -20,7 +20,7 @@ def get_gpu_backend():
     # Let PyTorch be the source of truth
     if torch.cuda.is_available():
         # Check if we're using ROCm by looking for HIP in the PyTorch build info
-        if torch.version.hip is not None:
+        if hasattr(torch.version, 'hip') and torch.version.hip is not None:
             return 'rocm'
         return 'cuda'
     else:
@@ -76,45 +76,65 @@ def get_gpu_info(device_index):
 
 def initialize_gpu(local_rank):
     """Initialize GPU in a vendor-agnostic way"""
-    if torch.cuda.is_available():  # This works for both CUDA and ROCm
-        torch.backends.cudnn.benchmark = True
+    # Check visible devices
+    hip_visible = os.environ.get("HIP_VISIBLE_DEVICES", "")
+    rocr_visible = os.environ.get("ROCR_VISIBLE_DEVICES", "")
+    slurm_localid = os.environ.get("SLURM_LOCALID", "")
+    logging.info(f"HIP_VISIBLE_DEVICES={hip_visible}, ROCR_VISIBLE_DEVICES={rocr_visible}, local_rank={local_rank}, SLURM_LOCALID={slurm_localid}")
+    
+    # Use SLURM_LOCALID as device ID if available, otherwise use local_rank
+    if os.environ.get("SLURM_LOCALID") is not None:
+        device_id = int(os.environ.get("SLURM_LOCALID"))
+        logging.info(f"Using SLURM_LOCALID={device_id} as device ID")
         
-        # Check visible devices
-        hip_visible = os.environ.get("HIP_VISIBLE_DEVICES", "")
-        rocr_visible = os.environ.get("ROCR_VISIBLE_DEVICES", "")
-        slurm_localid = os.environ.get("SLURM_LOCALID", "")
-        logging.info(f"HIP_VISIBLE_DEVICES={hip_visible}, ROCR_VISIBLE_DEVICES={rocr_visible}, local_rank={local_rank}, SLURM_LOCALID={slurm_localid}")
+        # Ensure environment variables are set correctly
+        if hip_visible != str(device_id):
+            os.environ["HIP_VISIBLE_DEVICES"] = str(device_id)
+            logging.info(f"Setting HIP_VISIBLE_DEVICES={device_id}")
         
-        # Use SLURM_LOCALID as device ID if available, otherwise use local_rank
-        if os.environ.get("SLURM_LOCALID") is not None:
-            device_id = int(os.environ.get("SLURM_LOCALID"))
-            logging.info(f"Using SLURM_LOCALID={device_id} as device ID")
+        if rocr_visible != str(device_id):
+            os.environ["ROCR_VISIBLE_DEVICES"] = str(device_id)
+            logging.info(f"Setting ROCR_VISIBLE_DEVICES={device_id}")
+    else:
+        device_id = local_rank
+        logging.info(f"Using local_rank={device_id} as device ID")
+    
+    # Check if CUDA is available after setting environment variables
+    if not torch.cuda.is_available():
+        if os.environ.get("MACHINE") == "frontier":
+            logging.warning("CUDA not available on Frontier, but continuing with ROCm backend")
+            # On Frontier, we'll try to proceed with ROCm even if CUDA isn't detected
+            device = torch.device(f"cuda:{device_id}")
+            handle = device_id
+            return device, handle
         else:
-            device_id = local_rank
-            logging.info(f"Using local_rank={device_id} as device ID")
-        
-        logging.info(f"Attaching GPU {device_id}")
-        torch.cuda.set_device(device_id)
-        device = torch.device(f"cuda:{device_id}")
-        
-        # Log device properties
+            raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
+    
+    logging.info(f"Attaching GPU {device_id}")
+    torch.cuda.set_device(device_id)
+    device = torch.device(f"cuda:{device_id}")
+    
+    # Log device properties
+    try:
         props = torch.cuda.get_device_properties(device_id)
         logging.info(f"Using device: {props.name}, Total memory: {props.total_memory/(1024**3):.2f} GB")
-        
-        logging.info(f"Initialized GPU {device_id} on device {device}")
-        
-        if NVIDIA_AVAILABLE:
+    except Exception as e:
+        logging.warning(f"Could not get device properties: {e}")
+    
+    logging.info(f"Initialized GPU {device_id} on device {device}")
+    
+    if NVIDIA_AVAILABLE:
+        try:
             import pynvml
             pynvml.nvmlInit()
             handle = pynvml.nvmlDeviceGetHandleByIndex(device_id)
-        elif ROCM_AVAILABLE:
-            handle = device_id  # ROCm SMI uses device index directly
-        else:
+        except Exception as e:
+            logging.warning(f"Could not initialize NVML: {e}")
             handle = None
+    elif ROCM_AVAILABLE:
+        handle = device_id  # ROCm SMI uses device index directly
     else:
-        device = torch.device("cpu")
         handle = None
-        raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
     return device, handle
 
