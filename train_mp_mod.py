@@ -466,33 +466,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             # Check remaining time periodically
             if iters % time_check_freq == 0:
-                try:
-                    # Get the first rank in the DP group to be the source
-                    dp_group = comm.get_group("dp")
-                    dp_ranks = comm.get_ranks_in_group("dp")
-                    src_rank = dp_ranks[0] if dp_ranks else 0
-                    
-                    # Only the source rank calculates the remaining time
-                    if world_rank == src_rank:
-                        remaining_time = torch.tensor(get_remaining_time(), device=device)
-                    else:
-                        remaining_time = torch.tensor(0.0, device=device)
-                        
-                    if params.distributed:
-                        GLOBAL_LOG.info(f"broadcasting remaining time {iters}/{epoch}")
-                        torch.distributed.broadcast(remaining_time, src=src_rank, group=dp_group)
-                        GLOBAL_LOG.info(f"broadcast complete {iters}/{epoch}")
-                            
-                    if remaining_time.item() < time_buffer:
-                        if world_rank == 0:
-                            GLOBAL_LOG.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
-                        save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
-                except Exception as e:
-                    GLOBAL_LOG.error(f"Error during remaining time broadcast at iteration {iters}: {e}")
-                    # Continue execution with a conservative estimate
-                    if get_remaining_time() < time_buffer * 2:  # Use a larger buffer when broadcast fails
-                        GLOBAL_LOG.info("Conservative time check triggered save_and_exit")
-                        save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
+                remaining_time = torch.tensor(get_remaining_time(), device=device)
+                if remaining_time.item() < time_buffer:
+                    if world_rank == 0:
+                        GLOBAL_LOG.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
+                    save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
 
             if iters % params.logging_freq == 0:
                 if world_rank == 0:
