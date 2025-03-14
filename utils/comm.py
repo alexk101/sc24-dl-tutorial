@@ -1,7 +1,7 @@
 import os
 import logging
-from utils.logging_utils import disable_logging
 from utils.rank_generator import RankGenerator
+from utils.logging_utils import GLOBAL_LOG
 import torch
 import math
 import numpy as np
@@ -91,7 +91,7 @@ def init(params, verbose=False):
     model_parallel_size = tp * cp * pp
     dp = get_world_size() // model_parallel_size
     assert dp >= 1, "ERROR: data parallel wireup failed since dp = {}".format(dp)
-    logging.info("Setting DP = {}, TP = {}, CP = {}, PP = {}".format(dp, tp, cp, pp))
+    GLOBAL_LOG.info("Setting DP = {}, TP = {}, CP = {}, PP = {}".format(dp, tp, cp, pp))
 
     # init model + dp groups individually
     init_model_parallel_info(
@@ -116,33 +116,32 @@ def init_process_group_perl():
     backend = os.getenv("DIST_BACKEND", "nccl")
     
     # Log distributed training parameters
-    logging.info(f"Distributed training parameters:")
-    logging.info(f"  World Size: {world_size}")
-    logging.info(f"  World Rank: {world_rank}") 
-    logging.info(f"  Local Rank: {local_rank}")
-    logging.info(f"  Master Address: {master_address}")
-    logging.info(f"  Master Port: {port}")
+    GLOBAL_LOG.info(f"Distributed training parameters:")
+    GLOBAL_LOG.info(f"  World Size: {world_size}")
+    GLOBAL_LOG.info(f"  World Rank: {world_rank}") 
+    GLOBAL_LOG.info(f"  Local Rank: {local_rank}")
+    GLOBAL_LOG.info(f"  Master Address: {master_address}")
+    GLOBAL_LOG.info(f"  Master Port: {port}")
     
 
     if world_size > 1:
-        with disable_logging():
-            # create tcp store
-            store = dist.TCPStore(
-                host_name=master_address,
-                port=port,
-                world_size=world_size,
-                is_master=(world_rank == 0),
-                timeout=dt.timedelta(seconds=60),
-            )
+        # create tcp store
+        store = dist.TCPStore(
+            host_name=master_address,
+            port=port,
+            world_size=world_size,
+            is_master=(world_rank == 0),
+            timeout=dt.timedelta(seconds=60),
+        )
 
-            # initialize process groups
-            logging.info(f"  Initializing process group with backend: {backend}")
-            dist.init_process_group(
-                backend=backend, 
-                rank=world_rank, 
-                world_size=world_size, 
-                store=store
-            )
+        # initialize process groups
+        GLOBAL_LOG.info(f"  Initializing process group with backend: {backend}")
+        dist.init_process_group(
+            backend=backend, 
+            rank=world_rank, 
+            world_size=world_size, 
+            store=store
+        )
 
 
 def init_process_group_mpi():
@@ -167,14 +166,13 @@ def init_process_group_mpi():
     logging.info(f"  Master Port: {port}")
 
     if world_size > 1:
-        with disable_logging():
-            dist.init_process_group(
-                backend="nccl",
-                # init_method="tcp://{}:{}".format(master_address, port),
-                init_method='env://',
-                rank=world_rank,
-                world_size=world_size,
-            )
+        dist.init_process_group(
+            backend="nccl",
+            # init_method="tcp://{}:{}".format(master_address, port),
+            init_method='env://',
+            rank=world_rank,
+            world_size=world_size,
+        )
 
 
 def init_model_parallel_info(tp=1, pp=1, dp=1, cp=1, order="tp-dp", verbose=False):
