@@ -410,11 +410,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     args.tboard_writer.add_scalar("Performance/comm_ratio", timing_stats["comm_ratio"], iters)
 
             if params.distributed:
-                GLOBAL_LOG.info(f"Rank {world_rank}: About to perform all_reduce operation")
                 torch.distributed.all_reduce(
                     loss, op=ReduceOp.AVG, group=comm.get_group("dp")
                 )
-                GLOBAL_LOG.info(f"Rank {world_rank}: All_reduce operation completed")
             tr_loss.append(loss.item())
 
             if profiler:
