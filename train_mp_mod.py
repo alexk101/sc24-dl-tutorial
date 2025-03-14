@@ -8,6 +8,27 @@ import numpy as np
 import argparse
 from utils.YParams import YParams
 
+# Custom logger that includes rank
+class RankLogger:
+    def __init__(self, rank):
+        self.rank = rank
+        self.logger = logging.getLogger()
+        
+    def info(self, msg):
+        self.logger.info(f"Rank {self.rank}: {msg}")
+        
+    def error(self, msg):
+        self.logger.error(f"Rank {self.rank}: {msg}")
+        
+    def warning(self, msg):
+        self.logger.warning(f"Rank {self.rank}: {msg}")
+
+# Log initial environment variables
+initial_hip = os.environ.get("HIP_VISIBLE_DEVICES")
+initial_rocr = os.environ.get("ROCR_VISIBLE_DEVICES")
+initial_cuda = os.environ.get("CUDA_VISIBLE_DEVICES")
+initial_slurm_localid = os.environ.get("SLURM_LOCALID")
+
 # Set environment variables for Frontier MI250X GPUs
 # Make all GPUs visible to all processes
 if os.environ.get("MACHINE") == "frontier":
@@ -800,6 +821,20 @@ if __name__ == "__main__":
     world_rank = comm.get_world_rank()
     local_rank = comm.get_local_rank()
     params.distributed = world_size > 1
+    
+    # Create a rank-aware logger
+    log = RankLogger(world_rank)
+    log.info(f"Initialized with world_size={world_size}, world_rank={world_rank}, local_rank={local_rank}")
+    log.info(f"CUDA available: {torch.cuda.is_available()}")
+    log.info(f"Device count: {torch.cuda.device_count()}")
+    
+    # Log environment variables
+    log.info(f"Environment variables:")
+    log.info(f"  HIP_VISIBLE_DEVICES: {os.environ.get('HIP_VISIBLE_DEVICES')}")
+    log.info(f"  ROCR_VISIBLE_DEVICES: {os.environ.get('ROCR_VISIBLE_DEVICES')}")
+    log.info(f"  CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
+    log.info(f"  SLURM_LOCALID: {os.environ.get('SLURM_LOCALID')}")
+    log.info(f"  SLURM_PROCID: {os.environ.get('SLURM_PROCID')}")
 
     initialize_gpu_backend()
     if args.local_batch_size:
@@ -863,10 +898,10 @@ if __name__ == "__main__":
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
 
-    logging.info(f"Rank {world_rank}: MASTER_PORT={os.environ.get('MASTER_PORT')}, MASTER_ADDR={os.environ.get('MASTER_ADDR')}")
+    log.info(f"MASTER_PORT={os.environ.get('MASTER_PORT')}, MASTER_ADDR={os.environ.get('MASTER_ADDR')}")
 
     train(params, args, local_rank, world_rank, world_size)
     
     if params.distributed:
         torch.distributed.barrier()
-    logging.info("DONE ---- rank %d" % world_rank)
+    log.info("DONE")

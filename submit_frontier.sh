@@ -49,10 +49,11 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 # Command line arguments
 args="${@}"
 
-# IMPORTANT: Do NOT set HIP_VISIBLE_DEVICES or ROCR_VISIBLE_DEVICES here
-# Let each process set them based on SLURM_LOCALID in the Python script
+# IMPORTANT: Unset any global GPU visibility variables to avoid conflicts
+unset HIP_VISIBLE_DEVICES
+unset ROCR_VISIBLE_DEVICES
+unset CUDA_VISIBLE_DEVICES
 
-# Log environment variables for debugging
 echo "Environment variables before srun:"
 echo "MACHINE=$MACHINE"
 echo "MASTER_ADDR=$MASTER_ADDR"
@@ -60,15 +61,15 @@ echo "MASTER_PORT=$MASTER_PORT"
 echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
 echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
 
-# IMPORTANT: Unset any global GPU visibility variables to avoid conflicts
-unset HIP_VISIBLE_DEVICES
-unset ROCR_VISIBLE_DEVICES
-unset CUDA_VISIBLE_DEVICES
+# Print loaded modules for debugging
+module list
 
-echo "After unsetting:"
-echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
-echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
+# Print LD_LIBRARY_PATH for debugging
+echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+
+# Print ROCM_PATH for debugging
+echo "ROCM_PATH=$ROCM_PATH"
 
 # Run with srun directly - no bash -c wrapper
-# Use explicit GPU mapping instead of closest
-srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --gpu-bind=map_gpu:0,1,2,3,4,5,6,7 --export=ALL ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
+# Use explicit GPU mapping for better control
+srun --ntasks=8 --ntasks-per-node=8 --gpus-per-node=8 --export=ALL ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
