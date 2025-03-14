@@ -36,6 +36,15 @@ os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
 os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
 
 def main():
+    hip_devices = os.environ.get("HIP_VISIBLE_DEVICES")
+    rocr_devices = os.environ.get("ROCR_VISIBLE_DEVICES")
+    cuda_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+    slurm_localid = os.environ.get("SLURM_LOCALID")
+    
+    logging.info(f"Current HIP_VISIBLE_DEVICES: {hip_devices}")
+    logging.info(f"Current ROCR_VISIBLE_DEVICES: {rocr_devices}")
+    logging.info(f"Current CUDA_VISIBLE_DEVICES: {cuda_devices}")
+    logging.info(f"SLURM_LOCALID: {slurm_localid}")
     # Get environment variables
     try:
         num_gpus_per_node = torch.cuda.device_count()
