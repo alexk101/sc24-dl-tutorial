@@ -490,8 +490,8 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                         save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
 
             if iters % params.logging_freq == 0:
-                comm_stats = time_communication(comm, device)
                 if world_rank == 0:
+                    comm_stats = time_communication(comm, device)
                     GLOBAL_LOG.info(f"Communication stats: {comm_stats}")
                     args.tboard_writer.add_scalar("Comm/all_reduce_time_ms", comm_stats["all_reduce_time_ms"], iters)
                     args.tboard_writer.add_scalar("Comm/broadcast_time_ms", comm_stats["broadcast_time_ms"], iters)

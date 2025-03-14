@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import time
-from gpu_utils import GLOBAL_LOG
+from utils.logging_utils import GLOBAL_LOG
 
 @torch.jit.script
 def lat(j: torch.Tensor, num_lat: int) -> torch.Tensor:
