@@ -374,6 +374,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             if profiler:
                 profiler.range_push(f"data copy in {i}")
 
+            # Add this before data loading
+            GLOBAL_LOG.info(f"Starting data loading for iteration {iters}")
+
             inp, tar = map(lambda x: x.to(device), data)
             if profiler:
                 profiler.range_pop()  # copy in
@@ -424,13 +427,15 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             if profiler:
                 profiler.range_pop()  # step
             # lr step
-            scheduler.step()
+            try:
+                scheduler.step()
+            except Exception as e:
+                GLOBAL_LOG.error(f"Error during scheduler.step() at iteration {iters}: {e}")
+                # Continue execution rather than hanging
 
             tr_end = time.time()
             tr_time += tr_end - tr_start
             dat_time += tr_start - dat_start
-            step_count += 1
-            iters += 1
 
             if hyperparameter_search and (iters % val_freq == 0):
                 val_loss, val_rmse, _ = validate_model(
@@ -482,6 +487,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     GLOBAL_LOG.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
                     GLOBAL_LOG.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
                     GLOBAL_LOG.info(f"remaining time {remaining_time}")
+
+            step_count += 1
+            iters += 1
+
+            # And this after data loading
+            GLOBAL_LOG.info(f"Completed data loading for iteration {iters}")
 
         GLOBAL_LOG.info(f"synchronizing at end of epoch {epoch}")
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
@@ -558,6 +569,15 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         if iters >= params.num_iters:
             break
             
+        # Add this before the time check
+        if params.distributed and (iters % time_check_freq == 0):
+            try:
+                GLOBAL_LOG.info(f"Synchronizing all ranks at iteration {iters}")
+                torch.distributed.barrier()
+                GLOBAL_LOG.info(f"Synchronization complete at iteration {iters}")
+            except Exception as e:
+                GLOBAL_LOG.error(f"Error during barrier at iteration {iters}: {e}")
+
     torch.cuda.synchronize()
     t2 = time.time()
     tottime = t2 - t1

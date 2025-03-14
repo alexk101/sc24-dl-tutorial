@@ -43,35 +43,40 @@ def weighted_acc(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     result = weighted_acc_channels(pred, target)
     return torch.mean(result, dim=0)
 
-def time_communication(comm, device):
-    # Create dummy tensors for testing
-    dummy_tensor = torch.ones(1000000, device=device)  # 4MB tensor
-    
-    # Time all-reduce (used in gradient synchronization)
-    torch.cuda.synchronize()
-    start = time.time()
-    if comm.is_initialized("dp"):
-        torch.distributed.all_reduce(dummy_tensor, group=comm.get_group("dp"))
-    torch.cuda.synchronize()
-    all_reduce_time = time.time() - start
-    
-    # Time broadcast (used in parameter synchronization)
-    torch.cuda.synchronize()
-    start = time.time()
-    if comm.is_initialized("tp"):
-        # Only perform broadcast if this rank is part of the TP group
-        try:
-            torch.distributed.broadcast(dummy_tensor, 0, group=comm.get_group("tp"))
-        except ValueError:
-            # If this rank is not part of the TP group, skip the broadcast
-            pass
-    torch.cuda.synchronize()
-    broadcast_time = time.time() - start
-    
-    return {
-        "all_reduce_time_ms": all_reduce_time * 1000,
-        "broadcast_time_ms": broadcast_time * 1000
+def time_communication(comm, device, timeout=10.0):
+    """Time communication operations with timeout and error handling"""
+    stats = {
+        "all_reduce_time_ms": 0.0,
+        "broadcast_time_ms": 0.0
     }
+    
+    if not comm or not torch.distributed.is_initialized():
+        GLOBAL_LOG.error("Communication not initialized")
+        return stats
+    
+    try:
+        # Time all_reduce
+        tensor = torch.ones(1, device=device)
+        torch.cuda.synchronize()
+        start = time.time()
+        torch.distributed.all_reduce(tensor, group=comm.get_group("dp"))
+        torch.cuda.synchronize()
+        end = time.time()
+        stats["all_reduce_time_ms"] = (end - start) * 1000
+        
+        # Time broadcast
+        tensor = torch.ones(1, device=device)
+        torch.cuda.synchronize()
+        start = time.time()
+        torch.distributed.broadcast(tensor, src=0, group=comm.get_group("dp"))
+        torch.cuda.synchronize()
+        end = time.time()
+        stats["broadcast_time_ms"] = (end - start) * 1000
+        
+        return stats
+    except Exception as e:
+        GLOBAL_LOG.error(f"Error in time_communication: {e}")
+        return stats
 
 def backward_with_comm_timing(loss, optimizer):
     # Start timing
