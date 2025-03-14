@@ -6,12 +6,49 @@ import numpy as np
 import argparse
 from utils.YParams import YParams
 from utils.logging_utils import GLOBAL_LOG
+
+# Set environment variables for Frontier MI250X GPUs
+GLOBAL_LOG.info("Running on Frontier - setting GPU visibility for all processes")
+os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
+GLOBAL_LOG.info(f"CUDA_VISIBLE_DEVICES: {os.environ['CUDA_VISIBLE_DEVICES']}")
+GLOBAL_LOG.info(f"HIP_VISIBLE_DEVICES: {os.environ['HIP_VISIBLE_DEVICES']}")
+GLOBAL_LOG.info(f"ROCR_VISIBLE_DEVICES: {os.environ['ROCR_VISIBLE_DEVICES']}")
+
+# Import torch early to ensure GPU detection works properly
 import torch
 GLOBAL_LOG.info(f"PyTorch version: {torch.__version__}")
 if hasattr(torch.version, 'hip'):
     GLOBAL_LOG.info(f"PyTorch HIP version: {torch.version.hip}")
 GLOBAL_LOG.info(f"CUDA available: {torch.cuda.is_available()}")
 GLOBAL_LOG.info(f"Device count: {torch.cuda.device_count()}")
+
+# Import GPU utilities
+from utils.gpu_utils import (
+    get_gpu_info, initialize_gpu, get_profiler, log_rocm_utilization, initialize_gpu_backend
+)
+
+# Initialize GPU backend - this sets NVIDIA_AVAILABLE and ROCM_AVAILABLE
+GLOBAL_LOG.info("Initializing GPU backend...")
+initialize_gpu_backend()
+
+# Import these AFTER initialize_gpu_backend has been called
+from utils.gpu_utils import NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND
+
+GLOBAL_LOG.info(f"After initialization: NVIDIA_AVAILABLE={NVIDIA_AVAILABLE}, ROCM_AVAILABLE={ROCM_AVAILABLE}, GPU_BACKEND={GPU_BACKEND}")
+
+# Try to create a test tensor on the GPU to verify it's working
+try:
+    device_id = int(os.environ.get("SLURM_LOCALID", "0"))
+    torch.cuda.set_device(device_id)
+    test_tensor = torch.zeros(1, device=f"cuda:{device_id}")
+    GLOBAL_LOG.info(f"Successfully created test tensor on GPU {device_id}")
+except Exception as e:
+    GLOBAL_LOG.error(f"Failed to create test tensor on GPU: {e}")
+    sys.exit(1)
+
+# Now import the rest of the modules
 from utils import get_data_loader_distributed
 from utils import comm
 from utils.loss import l2_loss, l2_loss_opt
@@ -34,32 +71,19 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import ReduceOp, destroy_process_group
 from torch.amp import autocast, GradScaler
 
-GLOBAL_LOG.info("Running on Frontier - setting GPU visibility for all processes")
-os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-os.environ["HIP_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-os.environ["ROCR_VISIBLE_DEVICES"] = os.environ.get("SLURM_LOCALID", "0")
-GLOBAL_LOG.info(f"CUDA_VISIBLE_DEVICES: {os.environ['CUDA_VISIBLE_DEVICES']}")
-GLOBAL_LOG.info(f"HIP_VISIBLE_DEVICES: {os.environ['HIP_VISIBLE_DEVICES']}")
-GLOBAL_LOG.info(f"ROCR_VISIBLE_DEVICES: {os.environ['ROCR_VISIBLE_DEVICES']}")
-
-# GPU vendor-specific imports
-from utils.gpu_utils import (
-    NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND, 
-    get_gpu_info, initialize_gpu, get_profiler, log_rocm_utilization, initialize_gpu_backend
-)
-
-# Initialize GPU backend
-initialize_gpu_backend()
-
 # Check for bfloat16 support
 BFLOAT16_AVAILABLE = False
 device_type = None
 if NVIDIA_AVAILABLE or ROCM_AVAILABLE:
+    GLOBAL_LOG.info(f"GPU support is available: NVIDIA={NVIDIA_AVAILABLE}, ROCM={ROCM_AVAILABLE}")
     BFLOAT16_AVAILABLE = torch.cuda.is_bf16_supported()
     device_type = "cuda"
-    # from torch.cuda.amp import autocast, GradScaler
     GLOBAL_LOG.info(f"bfloat16 support: {BFLOAT16_AVAILABLE}")
 else:
+    GLOBAL_LOG.error("No GPU support available after initialization.")
+    GLOBAL_LOG.error(f"NVIDIA_AVAILABLE={NVIDIA_AVAILABLE}, ROCM_AVAILABLE={ROCM_AVAILABLE}")
+    GLOBAL_LOG.error(f"CUDA available: {torch.cuda.is_available()}")
+    GLOBAL_LOG.error(f"Device count: {torch.cuda.device_count()}")
     raise RuntimeError("No GPU support available. This script requires either NVIDIA CUDA or AMD ROCm GPUs.")
 
 from torch.utils.flop_counter import FlopCounterMode

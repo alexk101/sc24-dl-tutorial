@@ -34,13 +34,15 @@ def initialize_gpu_backend():
     log = GLOBAL_LOG
     
     try:
-        GPU_BACKEND = get_gpu_backend()
+        if GPU_BACKEND is None:
+            GPU_BACKEND = get_gpu_backend()
         NVIDIA_AVAILABLE = GPU_BACKEND == 'cuda'
         ROCM_AVAILABLE = GPU_BACKEND == 'rocm'
         log.info(f"{GPU_BACKEND.upper()} GPU support available")
     except Exception as e:
         log.error(f"Failed to initialize GPU backend: {e}")
         raise
+    return GPU_BACKEND, NVIDIA_AVAILABLE, ROCM_AVAILABLE
 
 
 def log_rocm_utilization():
