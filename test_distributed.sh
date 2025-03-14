@@ -64,7 +64,6 @@ $CONDA_ENV_PATH/bin/python -c "import sys; print(f'Python version: {sys.version}
 $CONDA_ENV_PATH/bin/python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'Device count: {torch.cuda.device_count()}')"
 echo "=========================="
 
-# Run with explicit GPU binding
 echo "=== Starting distributed test ==="
 srun --ntasks=$((SLURM_NNODES*8)) --ntasks-per-node=8 --gpus-per-node=8 ${CONDA_ENV_PATH}/bin/python test_distributed.py
 echo "=== Test completed ==="

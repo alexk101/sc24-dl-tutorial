@@ -1,5 +1,4 @@
 import torch
-import logging
 import os
 import sys
 import subprocess
@@ -51,7 +50,7 @@ def log_rocm_utilization():
     result = subprocess.run([rocm_smi], capture_output=True, text=True)
     if result.returncode == 0:
         utilization_info = result.stdout
-        logging.info(f"ROCM Utilization: {utilization_info}")
+        GLOBAL_LOG.info(f"ROCM Utilization: {utilization_info}")
 
 
 def get_gpu_info(device_index):

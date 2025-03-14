@@ -1,5 +1,5 @@
 import os
-import logging
+from utils.logging_utils import GLOBAL_LOG
 import glob
 import torch
 import random
@@ -10,6 +10,7 @@ from torch import Tensor
 import h5py
 
 DATA_DIR = os.getenv("DATADIR")
+logging = GLOBAL_LOG
 
 def worker_init(wrk_id):
     np.random.seed(torch.utils.data.get_worker_info().seed%(2**32 - 1))

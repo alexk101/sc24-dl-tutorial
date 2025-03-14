@@ -1,5 +1,4 @@
 import os
-import logging
 from utils.rank_generator import RankGenerator
 from utils.logging_utils import GLOBAL_LOG
 import torch
@@ -158,12 +157,12 @@ def init_process_group_mpi():
     master_address = os.getenv("MASTER_ADDR", "127.0.0.1")
     
     # Log distributed training parameters
-    logging.info(f"Distributed training parameters:")
-    logging.info(f"  World Size: {world_size}")
-    logging.info(f"  Global Rank: {world_rank}") 
-    logging.info(f"  Local Rank: {local_rank}")
-    logging.info(f"  Master Address: {master_address}")
-    logging.info(f"  Master Port: {port}")
+    GLOBAL_LOG.info(f"Distributed training parameters:")
+    GLOBAL_LOG.info(f"  World Size: {world_size}")
+    GLOBAL_LOG.info(f"  Global Rank: {world_rank}") 
+    GLOBAL_LOG.info(f"  Local Rank: {local_rank}")
+    GLOBAL_LOG.info(f"  Master Address: {master_address}")
+    GLOBAL_LOG.info(f"  Master Port: {port}")
 
     if world_size > 1:
         dist.init_process_group(

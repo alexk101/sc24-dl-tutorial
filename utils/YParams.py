@@ -1,5 +1,7 @@
 from ruamel.yaml import YAML
-import logging
+from utils.logging_utils import GLOBAL_LOG
+
+logging = GLOBAL_LOG
 
 class YParams():
   """ Yaml file parser """

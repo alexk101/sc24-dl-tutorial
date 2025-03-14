@@ -1,11 +1,12 @@
 import os
 from pathlib import Path
-import logging
+from utils.logging_utils import GLOBAL_LOG
 
 DATA_DIR = os.getenv("DATADIR")
 SCRATCH = os.getenv("SCRATCH")
 TEMP_TRAIN = Path(f"{SCRATCH}/temp_train")
 TEMP_VAL = Path(f"{SCRATCH}/temp_val")
+logging = GLOBAL_LOG
 
 def data_subset(n_train: int=25):
     if (TEMP_TRAIN/str(n_train)).exists() and (TEMP_VAL/str(n_train)).exists():

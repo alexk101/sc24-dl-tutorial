@@ -1,9 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import logging
+from utils.logging_utils import GLOBAL_LOG
 import os
 import h5py
+
+logging = GLOBAL_LOG
 
 def generate_images(fields):
     inp, tar, gen = [x.detach().float().cpu().numpy() for x in fields]
