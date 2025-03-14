@@ -220,3 +220,24 @@ def process_comm_list(input_list):
         return filtered_list
     else:
         return ['-'.join(filtered_list)]
+
+def get_ranks_in_group(group_name):
+    """Returns a list of ranks in the specified group."""
+    if not is_initialized(group_name):
+        return [0]  # Return single rank if not distributed
+    
+    group = get_group(group_name)
+    world_size = dist.get_world_size(group)
+    ranks = []
+    
+    for rank in range(world_size):
+        if dist.get_rank(group) == rank:
+            ranks.append(dist.get_rank())
+    
+    # Gather all ranks
+    if dist.is_initialized():
+        gathered_ranks = [None] * world_size
+        dist.all_gather_object(gathered_ranks, ranks, group=group)
+        ranks = [r[0] for r in gathered_ranks if r]
+    
+    return sorted(ranks)
