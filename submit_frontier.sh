@@ -45,5 +45,5 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 args="${@}"
 
 # Run with srun directly - no bash -c wrapper
-srun --ntasks=${(SLURM_NNODES*8)} --ntasks-per-node=8 --gpus-per-node=8 \
+srun --ntasks=$((SLURM_NNODES*8)) --ntasks-per-node=8 --gpus-per-node=8 \
   ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args}
