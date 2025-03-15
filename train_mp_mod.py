@@ -178,7 +178,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         model = torch.compile(model)
 
     if params.amp_dtype == torch.float16:
-        scaler = GradScaler(device_type=device_type)
+        scaler = GradScaler()
 
     # weight initialization needs to be synced across shared weights
     if comm.get_size("tp-cp") > 1:
@@ -433,7 +433,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 hours_remaining = remaining_time / 3600
                 total_flops += flops_per_step
                 flops_per_second = total_flops / elapsed_time
-                
+
                 logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
                 logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
                 logging.info(f"Total FLOPs: {total_flops:,}")
