@@ -281,8 +281,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         logging.info(f"Will check remaining time every {time_check_freq} iterations")
 
     # Get initial FLOP count with a sample input
-    def count_training_flops(model, sample_input, loss_func):
-        flop_counter = FlopCounterMode()
+    def count_training_flops(model, sample_input, loss_func, world_rank):
+        if world_rank == 0:
+            flop_counter = FlopCounterMode()
+        else:
+            flop_counter = FlopCounterMode(display=False)
         with flop_counter:
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 output = model(sample_input)
@@ -292,7 +295,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     sample_input = next(iter(train_data_loader))[0].to(device)
     model.train()
-    flops_per_step = count_training_flops(model, sample_input, loss_func)
+    flops_per_step = count_training_flops(model, sample_input, loss_func, world_rank)
     total_flops = 0
 
     if world_rank == 0:
@@ -787,6 +790,7 @@ if __name__ == "__main__":
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
 
+    logging.info(f"[{world_rank}] Machine: {os.environ['MACHINE']}")
     train(params, args, local_rank, world_rank, world_size)
     
     if params.distributed:
