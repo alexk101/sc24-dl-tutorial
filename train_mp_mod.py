@@ -427,13 +427,19 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                         logging.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
                     save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
 
-            # Optional: Log time and FLOP statistics
             if world_rank == 0 and iters % params.logging_freq == 0:
                 elapsed_time = time.time() - start_time
                 remaining_time = get_remaining_time()
                 hours_remaining = remaining_time / 3600
+                total_flops += flops_per_step
+                flops_per_second = total_flops / elapsed_time
+                
                 logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
                 logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
+                logging.info(f"Total FLOPs: {total_flops:,}")
+                logging.info(f"FLOPS/second: {flops_per_second:,.2f}")
+                args.tboard_writer.add_scalar('Performance/total_flops', total_flops, iters)
+                args.tboard_writer.add_scalar('Performance/flops_per_second', flops_per_second, iters)
                 
             if iters % 100 == 0:  # Every 100 iterations
                 comm_stats = time_communication(comm, device)
@@ -480,15 +486,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             args.tboard_writer.add_scalar("Loss/valid", val_loss, iters)
             args.tboard_writer.add_scalar("Avg val iters per sec", val_iters_per_sec, iters)
             args.tboard_writer.add_scalar("Avg val samples per sec", val_samples_per_sec, iters)
-            args.tboard_writer.add_scalar(
-                "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
-            )
-            total_flops += flops_per_step
-            flops_per_second = total_flops / elapsed_time
-            logging.info(f"Total FLOPs: {total_flops:,}")
-            logging.info(f"FLOPS/second: {flops_per_second:,.2f}")
-            args.tboard_writer.add_scalar('Performance/total_flops', total_flops, iters)
-            args.tboard_writer.add_scalar('Performance/flops_per_second', flops_per_second, iters)
+            args.tboard_writer.add_scalar("RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters)
             args.tboard_writer.flush()
         if iters >= params.num_iters:
             break
