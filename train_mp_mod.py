@@ -13,7 +13,7 @@ from utils import get_data_loader_distributed
 from utils import comm
 from utils.loss import l2_loss, l2_loss_opt
 from utils.metrics import weighted_rmse, time_communication, backward_with_comm_timing
-from utils.data import data_subset, clean_up_temp_dirs, TEMP_TRAIN, TEMP_VAL, SCRATCH
+from utils.data import data_subset, TEMP_TRAIN, TEMP_VAL, SCRATCH
 from networks import vit
 
 from distributed.mappings import init_ddp_model_and_reduction_hooks
@@ -762,7 +762,6 @@ if __name__ == "__main__":
         params.experiment_dir = os.path.abspath(expDir)
 
         # Setup data
-        clean_up_temp_dirs(params.n_train)
         data_subset(params.n_train)
         params.train_data_path = str(TEMP_TRAIN/str(params.n_train))
         params.valid_data_path = str(TEMP_VAL/str(params.n_train))
@@ -793,5 +792,3 @@ if __name__ == "__main__":
     if params.distributed:
         torch.distributed.barrier()
     logging.info("DONE ---- rank %d" % world_rank)
-    if world_rank == 0:
-        clean_up_temp_dirs(params.n_train)
