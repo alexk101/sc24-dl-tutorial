@@ -30,9 +30,6 @@ class RankLogger:
   def warning(self, msg):
     self.logger.warning(msg, extra={'rank': self.rank})
 
-  def debug(self, msg):
-    self.logger.debug(msg, extra={'rank': self.rank})
-
   def log_to_file(self, log_filename='tensorflow.log'):
  
     if not os.path.exists(os.path.dirname(log_filename)):
