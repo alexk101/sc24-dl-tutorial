@@ -377,7 +377,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 profiler.range_push(f"data copy in {i}")
 
             # Add this before data loading
-            GLOBAL_LOG.info(f"Starting data loading for iteration {iters}")
+            GLOBAL_LOG.debug(f"Starting data loading for iteration {iters}")
 
             inp, tar = map(lambda x: x.to(device), data)
             if profiler:
@@ -419,11 +419,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     args.tboard_writer.add_scalar("Performance/comm_ratio", timing_stats["comm_ratio"], iters)
 
             if params.distributed:
-                GLOBAL_LOG.info(f"calling all reduce {iters}/{epoch}")
+                GLOBAL_LOG.debug(f"calling all reduce {iters}/{epoch}")
                 torch.distributed.all_reduce(
                     loss, op=ReduceOp.AVG, group=comm.get_group("dp")
                 )
-                GLOBAL_LOG.info(f"all reduce complete {iters}/{epoch}")
+                GLOBAL_LOG.debug(f"all reduce complete {iters}/{epoch}")
             tr_loss.append(loss.item())
 
             if profiler:
@@ -432,11 +432,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             if scheduler is not None:
                 try:
                     scheduler.step()
-                    GLOBAL_LOG.info(f"Scheduler step complete for iteration {iters}")
+                    GLOBAL_LOG.debug(f"Scheduler step complete for iteration {iters}")
                 except Exception as e:
                     GLOBAL_LOG.error(f"Error during scheduler.step() at iteration {iters}: {e}")
             else:
-                GLOBAL_LOG.info(f"No scheduler to step for iteration {iters}")
+                GLOBAL_LOG.debug(f"No scheduler to step for iteration {iters}")
 
             tr_end = time.time()
             tr_time += tr_end - tr_start
@@ -488,12 +488,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             step_count += 1
             iters += 1
             # And this after data loading
-            GLOBAL_LOG.info(f"Completed data loading for iteration {iters}")
+            GLOBAL_LOG.debug(f"Completed data loading for iteration {iters}")
 
-        GLOBAL_LOG.info(f"synchronizing at end of epoch {epoch}")
+        GLOBAL_LOG.debug(f"synchronizing at end of epoch {epoch}")
         torch.cuda.synchronize()  # device sync to ensure accurate epoch timings
         end = time.time()
-        GLOBAL_LOG.info(f"synchronize complete at end of epoch {epoch}")
+        GLOBAL_LOG.debug(f"synchronize complete at end of epoch {epoch}")
         if world_rank == 0:
             iters_per_sec = step_count / (end - start)
             samples_per_sec = params["global_batch_size"] * iters_per_sec
