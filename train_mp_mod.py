@@ -487,15 +487,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             step_count += 1
             iters += 1
-
-            # Add this check to ensure all ranks move to the next iteration
-            if params.distributed:
-                try:
-                    torch.distributed.barrier(group=comm.get_group("dp"))
-                    GLOBAL_LOG.info(f"Synchronized all ranks after iteration {iters-1}")
-                except Exception as e:
-                    GLOBAL_LOG.error(f"Error during barrier after iteration {iters-1}: {e}")
-
             # And this after data loading
             GLOBAL_LOG.info(f"Completed data loading for iteration {iters}")
 
@@ -573,16 +564,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             args.tboard_writer.flush()
         if iters >= params.num_iters:
             break
-            
-        # Add this before the time check
-        if params.distributed and (iters % time_check_freq == 0):
-            try:
-                GLOBAL_LOG.info(f"Synchronizing all ranks at iteration {iters}")
-                torch.distributed.barrier()
-                GLOBAL_LOG.info(f"Synchronization complete at iteration {iters}")
-            except Exception as e:
-                GLOBAL_LOG.error(f"Error during barrier at iteration {iters}: {e}")
-
     torch.cuda.synchronize()
     t2 = time.time()
     tottime = t2 - t1
