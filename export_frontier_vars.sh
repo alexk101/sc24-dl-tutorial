@@ -8,21 +8,21 @@ export NCCL_CROSS_NIC=1       # On large systems, this NCCL setting has been fou
 export PMI_NO_FORK=1
 export NCCL_IB_HCA=hsn0
 
-# Alternative approach to isolate NCCL communications
-export TORCH_NCCL_BLOCKING_WAIT=1
-export NCCL_IB_DISABLE=0
-export NCCL_SOCKET_NTHREADS=1
+# # Alternative approach to isolate NCCL communications
+# export TORCH_NCCL_BLOCKING_WAIT=1
+# export NCCL_IB_DISABLE=0
+# export NCCL_SOCKET_NTHREADS=1
 
 # Use job-specific temporary directory for NCCL
 export NCCL_TEMP_DIR="/tmp/nccl-${SLURM_JOB_ID}"
 mkdir -p $NCCL_TEMP_DIR
 
 # Ensure we use the correct network interface
-export NCCL_NET_GDR_READ=1
+# export NCCL_NET_GDR_READ=1
 export NCCL_NET_GDR_LEVEL=3
-export NCCL_LAUNCH_MODE=PARALLEL
+# export NCCL_LAUNCH_MODE=PARALLEL
 
-# Prevent NCCL from trying to connect to other jobs
-export NCCL_SINGLE_RING_THRESHOLD=0
-export NCCL_MIN_NCHANNELS=1
-export NCCL_TOPOLOGY=FLAT
+# # Prevent NCCL from trying to connect to other jobs
+# export NCCL_SINGLE_RING_THRESHOLD=0
+# export NCCL_MIN_NCHANNELS=1
+# export NCCL_TOPOLOGY=FLAT
