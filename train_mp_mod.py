@@ -787,6 +787,9 @@ if __name__ == "__main__":
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
+    # All ranks wait for rank 0 to finish setup
+    if params.distributed:
+        torch.distributed.barrier()
 
     logging.info(f"[{world_rank}] Machine: {os.environ['MACHINE']}")
     train(params, args, local_rank, world_rank, world_size)
