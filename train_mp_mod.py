@@ -317,11 +317,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         except Exception as e:
             logging.error(f"Rank {world_rank}: Error in count_training_flops: {e}")
             raise
-        finally:
-            # Ensure we exit flop counting mode
-            flop_counter.__exit__(None, None, None)
-            # Clean up any remaining gradients
-            model.zero_grad(set_to_none=True)
 
     logging.info(f"preparing sample input")
     sample_input = next(iter(train_data_loader))[0].to(device)
