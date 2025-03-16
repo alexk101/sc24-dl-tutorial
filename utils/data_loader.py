@@ -69,6 +69,7 @@ class ERA5Dataset(Dataset):
             self.n_samples_per_year = _f['fields'].shape[0]
             self.img_shape_x = self.params.img_size[0]
             self.img_shape_y = self.params.img_size[1]
+            logging.info(f"Image shape: {_f['fields'].shape[2]} x {_f['fields'].shape[3]}")
             assert(self.img_shape_x <= _f['fields'].shape[2] and self.img_shape_y <= _f['fields'].shape[3]), 'image shapes are greater than dataset image shapes'
 
         self.n_samples_total = self.n_years * self.n_samples_per_year
