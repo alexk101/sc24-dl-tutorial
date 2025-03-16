@@ -243,9 +243,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # Log initial loss on train and validation to tensorboard
     with torch.no_grad():
+        logging.info(f"Rank {world_rank} started training init")
         inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
         gen = model(inp)
         tr_loss = loss_func(gen, tar)
+        logging.info(f"Rank {world_rank} training init done")
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
         logging.info(f"Rank {world_rank} started validation")
