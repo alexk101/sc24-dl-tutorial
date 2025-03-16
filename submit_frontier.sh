@@ -29,8 +29,8 @@ trap 'cleanup_handler' USR1
 
 # Set up the data and log directories
 # DATADIR=/pscratch/sd/a/akiefer/era5
-# export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
-export DATADIR=/lustre/orion/geo163/proj-shared/fullsize_data
+export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
+# export DATADIR=/lustre/orion/geo163/proj-shared/fullsize_data
 export SCRATCH=/lustre/orion/geo163/scratch/kiefera
 export MACHINE=frontier
 
