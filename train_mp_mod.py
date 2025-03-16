@@ -243,18 +243,13 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # Log initial loss on train and validation to tensorboard
     with torch.no_grad():
-        logging.info(f"Init train")
         inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
         gen = model(inp)
         tr_loss = loss_func(gen, tar)
-        logging.info('Init val')
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
-        logging.info(f"Rank {world_rank} beginning validation")
         val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
-        logging.info(f"Rank {world_rank} completed validation")
         if params.distributed:
-            logging.info("Reducing train loss and rmse across ranks")
             torch.distributed.all_reduce(
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
             )
@@ -280,26 +275,48 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         if world_rank == 0:
             logging.info(f"Setting default logging frequency to {params.logging_freq}")
     
-    # Set time check frequency (e.g., every 100 iterations)
-    time_check_freq = 100  # Can be adjusted based on your needs
-    if world_rank == 0:
-        logging.info(f"Will check remaining time every {time_check_freq} iterations")
-
     # Get initial FLOP count with a sample input
     def count_training_flops(model, sample_input, loss_func, world_rank):
-        if world_rank == 0:
-            flop_counter = FlopCounterMode()
-        else:
-            flop_counter = FlopCounterMode(display=False)
-        with flop_counter:
-            with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
-                output = model(sample_input)
-                loss = loss_func(output, sample_input)  # Using input as dummy target
-            loss.backward()
-        return flop_counter.get_total_flops()
+        """Count FLOPs for a single training step"""
+        # Create flop counter for all ranks (just disable display for non-zero ranks)
+        flop_counter = FlopCounterMode(display=(world_rank == 0))
+        
+        try:
+            # Get a proper target from the input shape
+            sample_target = torch.zeros_like(sample_input)  # Or use appropriate target shape
+            
+            with flop_counter:
+                with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
+                    output = model(sample_input)
+                    loss = loss_func(output, sample_target)
+                loss.backward()
+                
+            # Clean up gradients
+            model.zero_grad(set_to_none=True)
+            
+            # Get flop count
+            flops = flop_counter.get_total_flops()
+            
+            # Ensure all ranks have same flop count
+            if params.distributed:
+                flops_tensor = torch.tensor([flops], device=sample_input.device)
+                torch.distributed.broadcast(flops_tensor, src=0)
+                flops = flops_tensor.item()
+                
+            return flops
+            
+        except Exception as e:
+            logging.error(f"Rank {world_rank}: Error in count_training_flops: {e}")
+            raise
+        finally:
+            # Ensure we exit flop counting mode
+            flop_counter.__exit__(None, None, None)
+            # Clean up any remaining gradients
+            model.zero_grad(set_to_none=True)
 
     sample_input = next(iter(train_data_loader))[0].to(device)
     model.train()
+    logging.info(f"Counting FLOPs")
     flops_per_step = count_training_flops(model, sample_input, loss_func, world_rank)
     total_flops = 0
 
@@ -418,7 +435,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     return best_val_rmse, peak_memory, training_time
 
             # Check remaining time periodically
-            if iters % time_check_freq == 0:
+            if iters % params.logging_freq == 0:
                 if world_rank == 0:
                     remaining_time = torch.tensor(get_remaining_time(), device=device)
                 else:
