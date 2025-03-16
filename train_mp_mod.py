@@ -255,13 +255,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
             )
             logging.info(f"Rank {world_rank} completed all_reduce")
-            torch.distributed.barrier()
         if world_rank == 0:
             args.tboard_writer.add_scalar("Loss/train", tr_loss.item(), 0)
             args.tboard_writer.add_scalar("Loss/valid", val_loss.item(), 0)
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
             )
+        if params.distributed:
+            torch.distributed.barrier()
         
     logging.info(f"Rank {world_rank} completed initialization")
     params.num_epochs = params.num_iters // len(train_data_loader)
