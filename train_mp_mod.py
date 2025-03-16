@@ -249,6 +249,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
         val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
+        logging.info(f"Rank {world_rank} completed validation")
         if params.distributed:
             torch.distributed.all_reduce(
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
@@ -260,14 +261,16 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
             )
-    
+    logging.info(f"Rank {world_rank} completed initialization")
     params.num_epochs = params.num_iters // len(train_data_loader)
+    logging.info(f"Rank {world_rank} completed num_epochs")
 
     iters = 0
     t1 = time.time()
     # Track start time and time limit
     start_time = time.time()
     time_buffer = args.time_buffer  # Use command line argument instead of hardcoded value
+    logging.info(f"Rank {world_rank} completed time_buffer")
     
     # Set default logging frequency if not specified
     if not hasattr(params, 'logging_freq'):
@@ -314,7 +317,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             # Clean up any remaining gradients
             model.zero_grad(set_to_none=True)
 
+    logging.info(f"preparing sample input")
     sample_input = next(iter(train_data_loader))[0].to(device)
+    logging.info(f"preparing sample input done")
     model.train()
     logging.info(f"Counting FLOPs")
     flops_per_step = count_training_flops(model, sample_input, loss_func, world_rank)
