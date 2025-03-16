@@ -70,7 +70,7 @@ class ERA5Dataset(Dataset):
             self.img_shape_x = self.params.img_size[0]
             self.img_shape_y = self.params.img_size[1]
             if self.img_shape_x > _f['fields'].shape[2] or self.img_shape_y > _f['fields'].shape[3]:
-                raise ValueError('Configuredimage shapes are greater than dataset image shapes')
+                raise ValueError('Configured image shapes are greater than dataset image shapes')
             if self.img_shape_x < _f['fields'].shape[2] or self.img_shape_y < _f['fields'].shape[3]:
                 logging.info("Configured image shape is smaller than dataset image shapes. Will crop")
                 logging.info(f"Image shape: {_f['fields'].shape[2]} x {_f['fields'].shape[3]}")
@@ -112,9 +112,15 @@ class ERA5Dataset(Dataset):
         if local_idx < step:
             local_idx += step
         
+        logging.info(f"Loading data from {self.files_paths[year_idx]}")
+        logging.info(f"Loading data from {local_idx} to {local_idx+step}")
+        logging.info(f"Image shape: {self.img_shape_x} x {self.img_shape_y}")
         # pre-process and get the image fields
         inp_field = self.files[year_idx][local_idx,:,0:self.img_shape_x,0:self.img_shape_y]
         tar_field = self.files[year_idx][local_idx+step,:,0:self.img_shape_x,0:self.img_shape_y]
         inp, tar = self._normalize(inp_field), self._normalize(tar_field)
+        logging.info("Completed normalization")
+        logging.info(f"Input shape: {inp.shape}")
+        logging.info(f"Target shape: {tar.shape}")
 
         return inp, tar
