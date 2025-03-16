@@ -112,15 +112,8 @@ class ERA5Dataset(Dataset):
         if local_idx < step:
             local_idx += step
         
-        logging.info(f"Loading data from {self.files_paths[year_idx]}")
-        logging.info(f"Loading data from {local_idx} to {local_idx+step}")
-        logging.info(f"Image shape: {self.img_shape_x} x {self.img_shape_y}")
         # pre-process and get the image fields
         inp_field = self.files[year_idx][local_idx,:,0:self.img_shape_x,0:self.img_shape_y]
         tar_field = self.files[year_idx][local_idx+step,:,0:self.img_shape_x,0:self.img_shape_y]
         inp, tar = self._normalize(inp_field), self._normalize(tar_field)
-        logging.info("Completed normalization")
-        logging.info(f"Input shape: {inp.shape}")
-        logging.info(f"Target shape: {tar.shape}")
-
         return inp, tar

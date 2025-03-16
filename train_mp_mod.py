@@ -117,16 +117,18 @@ def validate_model(model, val_loader, device, params, loss_func, world_rank, com
                     val_rmse += weighted_rmse(gen, tar)
                 valid_steps += 1
 
-                if params.distributed:
-                    torch.distributed.all_reduce(
-                        val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
-                    )
-                    torch.distributed.all_reduce(
-                        val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
-                    )
-
+    # First normalize by steps
     val_rmse /= valid_steps
     val_loss /= valid_steps
+
+    # Then do a single all_reduce for the final values
+    if params.distributed:
+        torch.distributed.all_reduce(
+            val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+        )
+        torch.distributed.all_reduce(
+            val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
+        )
     
     return val_loss, val_rmse, valid_steps
 
@@ -246,17 +248,15 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         tr_loss = loss_func(gen, tar)
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
+        logging.info(f"Rank {world_rank} beginning validation")
         val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
+        logging.info(f"Rank {world_rank} completed validation")
         if params.distributed:
+            logging.info("Reducing train loss and rmse across ranks")
             torch.distributed.all_reduce(
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
             )
-            torch.distributed.all_reduce(
-                val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
-            )
-            torch.distributed.all_reduce(
-                val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
-            )
+            logging.info(f"Rank {world_rank} completed all_reduce")
         if world_rank == 0:
             args.tboard_writer.add_scalar("Loss/train", tr_loss.item(), 0)
             args.tboard_writer.add_scalar("Loss/valid", val_loss.item(), 0)
