@@ -145,10 +145,12 @@ def init_process_group_perl():
 def init_process_group_mpi():
     """Initialize the process group using MPI"""
     num_gpus_per_node = torch.cuda.device_count()
-    comm = MPI.COMM_WORLD
-    world_size = comm.Get_size()
-    global_rank = comm.Get_rank()
-    local_rank = int(global_rank) % int(num_gpus_per_node) 
+    # comm = MPI.COMM_WORLD
+    # world_size = comm.Get_size()
+    # world_rank = comm.Get_rank()
+    # local_rank = int(global_rank) % int(num_gpus_per_node)
+    world_size = int(os.getenv("WORLD_SIZE", 1))
+    world_rank = int(os.getenv("RANK", 0))
 
 
     if world_size > 1:
@@ -157,7 +159,7 @@ def init_process_group_mpi():
                 backend="nccl",
                 #init_method="tcp://{}:{}".format(args.master_addr, args.master_port),
                 init_method='env://',
-                rank=global_rank,
+                rank=world_rank,
                 world_size=world_size,
             )
 
