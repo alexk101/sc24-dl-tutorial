@@ -151,17 +151,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         if world_rank == 0:
             logging.info(f"Using AMP dtype: {params.amp_dtype}")
 
-    # Get data loader
-    logging.info("rank %d, begin data loader init" % world_rank)
-    
-    train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(
-        params, str(TEMP_TRAIN/str(params.n_train)), params.distributed, train=True
-    )
-    val_data_loader, valid_dataset = get_data_loader_distributed(
-        params, str(TEMP_VAL/str(params.n_train)), params.distributed, train=False
-    )
-    logging.info("rank %d, data loader initialized" % (world_rank))
-
     # Log GPU details
     gpu_info = get_gpu_info(local_rank)
     logging.info(
@@ -195,6 +184,24 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         model = init_ddp_model_and_reduction_hooks(model, device_ids=[local_rank],
                                                    output_device=[local_rank],
                                                    bucket_cap_mb=args.bucket_cap_mb)
+    if world_rank == 0:
+        # Setup data
+        data_subset(params.n_train)
+        params.train_data_path = str(TEMP_TRAIN/str(params.n_train))
+        params.valid_data_path = str(TEMP_VAL/str(params.n_train))
+    if params.distributed:
+        torch.distributed.barrier()
+
+    # Get data loader
+    logging.info("rank %d, begin data loader init" % world_rank)
+    
+    train_data_loader, train_dataset, train_sampler = get_data_loader_distributed(
+        params, str(TEMP_TRAIN/str(params.n_train)), params.distributed, train=True
+    )
+    val_data_loader, valid_dataset = get_data_loader_distributed(
+        params, str(TEMP_VAL/str(params.n_train)), params.distributed, train=False
+    )
+    logging.info("rank %d, data loader initialized" % (world_rank))
 
     if params.enable_fused:
         optimizer = optim.Adam(
@@ -248,6 +255,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         tr_loss = loss_func(gen, tar)
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
+        logging.info(f"Rank {world_rank} started validation")
         val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
         logging.info(f"Rank {world_rank} completed validation")
         if params.distributed:
@@ -794,11 +802,6 @@ if __name__ == "__main__":
         expDir: Path = baseDir / run_num
         expDir.mkdir(exist_ok=True, parents=True)
         params.experiment_dir = os.path.abspath(expDir)
-
-        # Setup data
-        data_subset(params.n_train)
-        params.train_data_path = str(TEMP_TRAIN/str(params.n_train))
-        params.valid_data_path = str(TEMP_VAL/str(params.n_train))
         
         logging_utils.log_to_file(
             logger_name=None, log_filename=os.path.join(expDir, "out.log")
@@ -820,9 +823,6 @@ if __name__ == "__main__":
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
-    # All ranks wait for rank 0 to finish setup
-    if params.distributed:
-        torch.distributed.barrier()
 
     logging.info(f"[{world_rank}] Machine: {os.environ['MACHINE']}")
     train(params, args, local_rank, world_rank, world_size)
