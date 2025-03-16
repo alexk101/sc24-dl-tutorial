@@ -84,15 +84,18 @@ def get_remaining_time():
 def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
     """Save checkpoint and exit gracefully"""
     try:
-        save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
         if world_rank == 0:
+            # Only rank 0 saves the checkpoint
+            save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
             logging.info("Time limit approaching - saved checkpoint and exiting")
+        
         if params.distributed:
-            torch.distributed.barrier()  # Ensure all processes finish saving
+            # All ranks wait for rank 0 to finish saving
+            torch.distributed.barrier()
             destroy_process_group(None)
         sys.exit(0)
     except Exception as e:
-        logging.error(f"Error during save_and_exit: {e}")
+        logging.error(f"Error during save_and_exit on rank {world_rank}: {e}")
         sys.exit(1)
 
 # Get profiler once at module level
@@ -500,64 +503,67 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
 def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank):
     """Save training checkpoint with model parallel support"""
-    if world_rank == 0:
-        # Save model configuration and training state
-        checkpoint = {
-            'model_state_dict': model.module.state_dict() if hasattr(model, 'module') else model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict() if scheduler is not None else None,
-            'iters': iters,
-            # Save model parallel configuration
-            'parallel_config': {
-                'tp_size': params.get('tp', 1),
-                'cp_size': params.get('cp', 1),
-                'parallel_order': params.get('order', 'tp-cp-dp'),
-            },
-            # Save model architecture config
-            'model_config': {
-                'embed_dim': params.embed_dim,
-                'depth': params.depth,
-                'num_heads': params.num_heads,
-                'patch_size': params.patch_size,
-            },
-            # Save training config
-            'training_config': {
-                'amp_dtype': str(params.amp_dtype),
-                'global_batch_size': params.global_batch_size,
-                'local_batch_size': params.local_batch_size,
-            }
+    # Early return for non-zero ranks
+    if world_rank != 0:
+        return
+        
+    # Save model configuration and training state
+    checkpoint = {
+        'model_state_dict': model.module.state_dict() if hasattr(model, 'module') else model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict() if scheduler is not None else None,
+        'iters': iters,
+        # Save model parallel configuration
+        'parallel_config': {
+            'tp_size': params.get('tp', 1),
+            'cp_size': params.get('cp', 1),
+            'parallel_order': params.get('order', 'tp-cp-dp'),
+        },
+        # Save model architecture config
+        'model_config': {
+            'embed_dim': params.embed_dim,
+            'depth': params.depth,
+            'num_heads': params.num_heads,
+            'patch_size': params.patch_size,
+        },
+        # Save training config
+        'training_config': {
+            'amp_dtype': str(params.amp_dtype),
+            'global_batch_size': params.global_batch_size,
+            'local_batch_size': params.local_batch_size,
         }
-        
-        # Save to temporary file first
-        temp_checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt.tmp')
-        checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt')
-        torch.save(checkpoint, temp_checkpoint_path)
-        # Atomic rename to avoid corrupted checkpoints
-        os.rename(temp_checkpoint_path, checkpoint_path)
-        
-        # Save latest checkpoint symlink
-        latest_path = os.path.join(params.experiment_dir, 'checkpoint_latest.pt')
-        if os.path.exists(latest_path):
-            os.remove(latest_path)
-        os.symlink(f'checkpoint_{iters}.pt', latest_path)
-        
-        logging.info(f"Saved checkpoint at iteration {iters} to {checkpoint_path}")
-        
-        # Cleanup old checkpoints if needed
-        if hasattr(params, 'keep_n_checkpoints'):
-            try:
-                checkpoint_files = sorted([
-                    f for f in os.listdir(params.experiment_dir) 
-                    if f.startswith('checkpoint_') and f.endswith('.pt') and not f == 'checkpoint_latest.pt'
-                ])
-                for old_ckpt in checkpoint_files[:-params.keep_n_checkpoints]:
-                    try:
-                        os.remove(os.path.join(params.experiment_dir, old_ckpt))
-                        logging.info(f"Removed old checkpoint: {old_ckpt}")
-                    except OSError as e:
-                        logging.warning(f"Failed to remove checkpoint {old_ckpt}: {e}")
-            except Exception as e:
-                logging.warning(f"Error during checkpoint cleanup: {e}")
+    }
+    
+    # Save to temporary file first
+    temp_checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt.tmp')
+    checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt')
+    torch.save(checkpoint, temp_checkpoint_path)
+    # Atomic rename to avoid corrupted checkpoints
+    os.rename(temp_checkpoint_path, checkpoint_path)
+    
+    # Save latest checkpoint symlink
+    latest_path = os.path.join(params.experiment_dir, 'checkpoint_latest.pt')
+    if os.path.exists(latest_path):
+        os.remove(latest_path)
+    os.symlink(f'checkpoint_{iters}.pt', latest_path)
+    
+    logging.info(f"Saved checkpoint at iteration {iters} to {checkpoint_path}")
+    
+    # Cleanup old checkpoints if needed
+    if hasattr(params, 'keep_n_checkpoints'):
+        try:
+            checkpoint_files = sorted([
+                f for f in os.listdir(params.experiment_dir) 
+                if f.startswith('checkpoint_') and f.endswith('.pt') and not f == 'checkpoint_latest.pt'
+            ])
+            for old_ckpt in checkpoint_files[:-params.keep_n_checkpoints]:
+                try:
+                    os.remove(os.path.join(params.experiment_dir, old_ckpt))
+                    logging.info(f"Removed old checkpoint: {old_ckpt}")
+                except OSError as e:
+                    logging.warning(f"Failed to remove checkpoint {old_ckpt}: {e}")
+        except Exception as e:
+            logging.warning(f"Error during checkpoint cleanup: {e}")
 
 def validate_checkpoint_config(checkpoint, params, world_rank):
     """Validate checkpoint configuration matches current setup"""
