@@ -75,7 +75,7 @@ class ERA5Dataset(Dataset):
                 logging.info("Configured image shape is smaller than dataset image shapes. Will crop")
                 logging.info(f"Image shape: {_f['fields'].shape[2]} x {_f['fields'].shape[3]}")
                 logging.info(f"Image shape: {self.img_shape_x} x {self.img_shape_y}")
-            # assert(self.img_shape_x <= _f['fields'].shape[2] and self.img_shape_y <= _f['fields'].shape[3]), 'image shapes are greater than dataset image shapes'
+            assert(self.img_shape_x <= _f['fields'].shape[2] and self.img_shape_y <= _f['fields'].shape[3]), 'image shapes are greater than dataset image shapes'
 
         self.n_samples_total = self.n_years * self.n_samples_per_year
         if self.limit_nsamples is not None:
