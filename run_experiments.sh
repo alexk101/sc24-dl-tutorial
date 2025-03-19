@@ -3,8 +3,9 @@
 # Base configuration
 BASE_CONFIG="mp"
 BASE_NODES=128
-TIME_LIMIT="12:00:00"
+TIME_LIMIT="06:00:00"
 BASE_BATCH_SIZE=8
+TIME_LIMIT_2="02:00:00"
 
 # Arrays for parameter sweeps
 SCALE_FACTORS=(1 2 4 8)
@@ -214,7 +215,7 @@ echo "Running Compute Resource Scaling Experiments..."
 # GPU Count Scaling
 for nodes in "${NODE_COUNTS[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT_2}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${nodes} "${temp_script}" \
         --config=${BASE_CONFIG} \
