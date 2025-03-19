@@ -425,14 +425,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     if world_rank == 0:
                         logging.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
                     save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
-
-            # Optional: Log time and FLOP statistics
-            if world_rank == 0 and iters % params.logging_freq == 0:
-                elapsed_time = time.time() - start_time
-                remaining_time = get_remaining_time()
-                hours_remaining = remaining_time / 3600
-                logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
-                logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
                 
             if iters % 100 == 0:  # Every 100 iterations
                 comm_stats = time_communication(comm, device)
@@ -472,6 +464,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         )
         val_end = time.time()
         if world_rank == 0:
+            elapsed_time = time.time() - start_time
+            remaining_time = get_remaining_time()
+            hours_remaining = remaining_time / 3600
+            logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
+            logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
             val_iters_per_sec = valid_steps / (val_end - val_start)
             val_samples_per_sec = params["global_batch_size"] * iters_per_sec
             logging.info("  Avg val loss={}".format(val_loss.item()))
