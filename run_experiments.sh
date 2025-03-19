@@ -86,7 +86,8 @@ fi
 # 1. Model Scaling Experiments
 echo "Running Model Scaling Experiments..."
 
-# Parameter Count Scaling
+# Parameter Count Scaling - Depth
+echo "Running depth scaling experiments..."
 for scale in "${SCALE_FACTORS[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
     sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
@@ -95,6 +96,26 @@ for scale in "${SCALE_FACTORS[@]}"; do
         --config=${BASE_CONFIG} \
         --tensor_parallel=4 \
         --scale_depth=$((12 * scale)) \
+        --scale_heads=8 \
+        --scale_dim=384 \
+        --n_train=25 \
+        --local_batch_size=${BASE_BATCH_SIZE} \
+        --num_data_workers=1 \
+        --n_nodes=${BASE_NODES}
+    
+    rm "${temp_script}"
+done
+
+# Parameter Count Scaling - Heads
+echo "Running attention heads scaling experiments..."
+for scale in "${SCALE_FACTORS[@]}"; do
+    temp_script="submit_frontier_${RANDOM}.sh"
+    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    
+    sbatch --nodes ${BASE_NODES} "${temp_script}" \
+        --config=${BASE_CONFIG} \
+        --tensor_parallel=4 \
+        --scale_depth=12 \
         --scale_heads=$((8 * scale)) \
         --scale_dim=384 \
         --n_train=25 \
