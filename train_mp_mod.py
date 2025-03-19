@@ -773,7 +773,6 @@ if __name__ == "__main__":
         params.experiment_dir = os.path.abspath(expDir)
 
         # Setup data
-        clean_up_temp_dirs(params.n_train)
         data_subset(params.n_train)
         params.train_data_path = str(TEMP_TRAIN/str(params.n_train))
         params.valid_data_path = str(TEMP_VAL/str(params.n_train))
@@ -804,5 +803,3 @@ if __name__ == "__main__":
     if params.distributed:
         torch.distributed.barrier()
     logging.info("DONE ---- rank %d" % world_rank)
-    if world_rank == 0:
-        clean_up_temp_dirs(params.n_train)
