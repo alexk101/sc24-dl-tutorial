@@ -120,12 +120,22 @@ class Block(nn.Module):
                 dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
             self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
+        self.gradient_checkpointing = False
 
-    def forward(self, x):
+    def _forward(self, x):
         y = self.attn(self.norm1(x))
         x = x + self.drop_path(y)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
+
+    def forward(self, x):
+        if self.gradient_checkpointing and self.training:
+            return torch.utils.checkpoint.checkpoint(
+                self._forward,
+                x,
+                use_reentrant=False  # More memory efficient and safer option
+            )
+        return self._forward(x)
 
 
 class PatchEmbed(nn.Module):
@@ -232,6 +242,12 @@ class VisionTransformer(nn.Module):
 
         x = self.forward_head(x)
         return x
+
+    def enable_checkpointing(self):
+        """Enable gradient checkpointing for transformer blocks"""
+        if hasattr(self, 'blocks'):
+            for block in self.blocks:
+                block.gradient_checkpointing = True
 
 def ViT(params, **kwargs):
     model = VisionTransformer(

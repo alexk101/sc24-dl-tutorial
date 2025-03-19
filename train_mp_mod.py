@@ -174,8 +174,10 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     # create model
     model = vit.ViT(params).to(device)
 
-    if params.enable_jit:
-        model = torch.compile(model)
+    if params.gradient_checkpointing:
+        model.enable_checkpointing()
+        if world_rank == 0:
+            logging.info("Gradient checkpointing enabled")
 
     if params.amp_dtype == torch.float16:
         scaler = GradScaler(device_type=device_type)
@@ -660,11 +662,9 @@ if __name__ == "__main__":
     parser.add_argument("--time_buffer", type=int, default=60, help="buffer time in seconds before SLURM time limit")
     parser.add_argument("--time_limit", type=str, default="00:30:00", help="SLURM time limit (Not used here, but logged for later analysis)")
 
-    # Add this with the other arguments
     parser.add_argument("--learning_rate", type=float, default=None, help="Override the default learning rate")
-
-    # Add with other scaling arguments
     parser.add_argument("--patch_size", type=int, default=None, help="Override the default patch size")
+    parser.add_argument("--gradient_checkpointing", action="store_true", help="Enable gradient checkpointing to save memory")
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
@@ -693,14 +693,13 @@ if __name__ == "__main__":
     else:
         amp_dtype = torch.float32
 
-    params.update(
-        {
-            "amp_enabled": amp_dtype is not torch.float32,
-            "amp_dtype": amp_dtype,
-            "enable_fused": args.enable_fused,
-            "enable_jit": args.enable_jit,
-        }
-    )
+    params.update({
+        "amp_enabled": amp_dtype is not torch.float32,
+        "amp_dtype": amp_dtype,
+        "enable_fused": args.enable_fused,
+        "enable_jit": args.enable_jit,
+        "gradient_checkpointing": args.gradient_checkpointing,
+    })
 
     if args.data_loader_config:
         params.update({"data_loader_config": args.data_loader_config})
