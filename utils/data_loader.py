@@ -69,12 +69,6 @@ class ERA5Dataset(Dataset):
             self.n_samples_per_year = _f['fields'].shape[0]
             self.img_shape_x = self.params.img_size[0]
             self.img_shape_y = self.params.img_size[1]
-            if self.img_shape_x > _f['fields'].shape[2] or self.img_shape_y > _f['fields'].shape[3]:
-                raise ValueError('Configured image shapes are greater than dataset image shapes')
-            if self.img_shape_x < _f['fields'].shape[2] or self.img_shape_y < _f['fields'].shape[3]:
-                logging.info("Configured image shape is smaller than dataset image shapes. Will crop")
-                logging.info(f"Image shape: {_f['fields'].shape[2]} x {_f['fields'].shape[3]}")
-                logging.info(f"Image shape: {self.img_shape_x} x {self.img_shape_y}")
             assert(self.img_shape_x <= _f['fields'].shape[2] and self.img_shape_y <= _f['fields'].shape[3]), 'image shapes are greater than dataset image shapes'
 
         self.n_samples_total = self.n_years * self.n_samples_per_year
@@ -116,4 +110,5 @@ class ERA5Dataset(Dataset):
         inp_field = self.files[year_idx][local_idx,:,0:self.img_shape_x,0:self.img_shape_y]
         tar_field = self.files[year_idx][local_idx+step,:,0:self.img_shape_x,0:self.img_shape_y]
         inp, tar = self._normalize(inp_field), self._normalize(tar_field)
+
         return inp, tar

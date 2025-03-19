@@ -13,7 +13,7 @@ from utils import get_data_loader_distributed
 from utils import comm
 from utils.loss import l2_loss, l2_loss_opt
 from utils.metrics import weighted_rmse, time_communication, backward_with_comm_timing
-from utils.data import data_subset, TEMP_TRAIN, TEMP_VAL, SCRATCH
+from utils.data import data_subset, clean_up_temp_dirs, TEMP_TRAIN, TEMP_VAL, SCRATCH
 from networks import vit
 
 from distributed.mappings import init_ddp_model_and_reduction_hooks
@@ -84,18 +84,15 @@ def get_remaining_time():
 def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
     """Save checkpoint and exit gracefully"""
     try:
+        save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
         if world_rank == 0:
-            # Only rank 0 saves the checkpoint
-            save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
             logging.info("Time limit approaching - saved checkpoint and exiting")
-        
         if params.distributed:
-            # All ranks wait for rank 0 to finish saving
-            torch.distributed.barrier()
+            torch.distributed.barrier()  # Ensure all processes finish saving
             destroy_process_group(None)
         sys.exit(0)
     except Exception as e:
-        logging.error(f"Error during save_and_exit on rank {world_rank}: {e}")
+        logging.error(f"Error during save_and_exit: {e}")
         sys.exit(1)
 
 # Get profiler once at module level
@@ -117,18 +114,16 @@ def validate_model(model, val_loader, device, params, loss_func, world_rank, com
                     val_rmse += weighted_rmse(gen, tar)
                 valid_steps += 1
 
-    # First normalize by steps
+                if params.distributed:
+                    torch.distributed.all_reduce(
+                        val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+                    )
+                    torch.distributed.all_reduce(
+                        val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
+                    )
+
     val_rmse /= valid_steps
     val_loss /= valid_steps
-
-    # Then do a single all_reduce for the final values
-    if params.distributed:
-        torch.distributed.all_reduce(
-            val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
-        )
-        torch.distributed.all_reduce(
-            val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
-        )
     
     return val_loss, val_rmse, valid_steps
 
@@ -183,7 +178,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         model = torch.compile(model)
 
     if params.amp_dtype == torch.float16:
-        scaler = GradScaler()
+        scaler = GradScaler(device_type=device_type)
 
     # weight initialization needs to be synced across shared weights
     if comm.get_size("tp-cp") > 1:
@@ -243,40 +238,36 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # Log initial loss on train and validation to tensorboard
     with torch.no_grad():
-        logging.info(f"Rank {world_rank} started training init")
         inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
         gen = model(inp)
         tr_loss = loss_func(gen, tar)
-        logging.info(f"Rank {world_rank} training init done")
         inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
         gen = model(inp)
-        logging.info(f"Rank {world_rank} started validation")
         val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
-        logging.info(f"Rank {world_rank} completed validation")
         if params.distributed:
             torch.distributed.all_reduce(
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
             )
-            logging.info(f"Rank {world_rank} completed all_reduce")
+            torch.distributed.all_reduce(
+                val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+            )
+            torch.distributed.all_reduce(
+                val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
+            )
         if world_rank == 0:
             args.tboard_writer.add_scalar("Loss/train", tr_loss.item(), 0)
             args.tboard_writer.add_scalar("Loss/valid", val_loss.item(), 0)
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
             )
-        if params.distributed:
-            torch.distributed.barrier()
-        
-    logging.info(f"Rank {world_rank} completed initialization")
+    
     params.num_epochs = params.num_iters // len(train_data_loader)
-    logging.info(f"Rank {world_rank} completed num_epochs")
 
     iters = 0
     t1 = time.time()
     # Track start time and time limit
     start_time = time.time()
     time_buffer = args.time_buffer  # Use command line argument instead of hardcoded value
-    logging.info(f"Rank {world_rank} completed time_buffer")
     
     # Set default logging frequency if not specified
     if not hasattr(params, 'logging_freq'):
@@ -284,46 +275,24 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         if world_rank == 0:
             logging.info(f"Setting default logging frequency to {params.logging_freq}")
     
-    # Get initial FLOP count with a sample input
-    def count_training_flops(model, sample_input, loss_func, world_rank):
-        """Count FLOPs for a single training step"""
-        # Create flop counter for all ranks (just disable display for non-zero ranks)
-        flop_counter = FlopCounterMode(display=(world_rank == 0))
-        
-        try:
-            # Get a proper target from the input shape
-            sample_target = torch.zeros_like(sample_input)  # Or use appropriate target shape
-            
-            with flop_counter:
-                with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
-                    output = model(sample_input)
-                    loss = loss_func(output, sample_target)
-                loss.backward()
-                
-            # Clean up gradients
-            model.zero_grad(set_to_none=True)
-            
-            # Get flop count
-            flops = flop_counter.get_total_flops()
-            
-            # Ensure all ranks have same flop count
-            if params.distributed:
-                flops_tensor = torch.tensor([flops], device=sample_input.device)
-                torch.distributed.broadcast(flops_tensor, src=0)
-                flops = flops_tensor.item()
-                
-            return flops
-            
-        except Exception as e:
-            logging.error(f"Rank {world_rank}: Error in count_training_flops: {e}")
-            raise
+    # Set time check frequency (e.g., every 100 iterations)
+    time_check_freq = 100  # Can be adjusted based on your needs
+    if world_rank == 0:
+        logging.info(f"Will check remaining time every {time_check_freq} iterations")
 
-    logging.info(f"preparing sample input")
+    # Get initial FLOP count with a sample input
+    def count_training_flops(model, sample_input, loss_func):
+        flop_counter = FlopCounterMode()
+        with flop_counter:
+            with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
+                output = model(sample_input)
+                loss = loss_func(output, sample_input)  # Using input as dummy target
+            loss.backward()
+        return flop_counter.get_total_flops()
+
     sample_input = next(iter(train_data_loader))[0].to(device)
-    logging.info(f"preparing sample input done")
     model.train()
-    logging.info(f"Counting FLOPs")
-    flops_per_step = count_training_flops(model, sample_input, loss_func, world_rank)
+    flops_per_step = count_training_flops(model, sample_input, loss_func)
     total_flops = 0
 
     if world_rank == 0:
@@ -441,7 +410,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     return best_val_rmse, peak_memory, training_time
 
             # Check remaining time periodically
-            if iters % params.logging_freq == 0:
+            if iters % time_check_freq == 0:
                 if world_rank == 0:
                     remaining_time = torch.tensor(get_remaining_time(), device=device)
                 else:
@@ -455,19 +424,13 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                         logging.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
                     save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
 
+            # Optional: Log time and FLOP statistics
             if world_rank == 0 and iters % params.logging_freq == 0:
                 elapsed_time = time.time() - start_time
                 remaining_time = get_remaining_time()
                 hours_remaining = remaining_time / 3600
-                total_flops += flops_per_step
-                flops_per_second = total_flops / elapsed_time
-
                 logging.info(f"Time elapsed: {elapsed_time:.2f}s, Remaining: {hours_remaining:.2f}h")
                 logging.info(f"Current iteration: {iters}/{params.num_iters} ({(iters/params.num_iters)*100:.1f}%)")
-                logging.info(f"Total FLOPs: {total_flops:,}")
-                logging.info(f"FLOPS/second: {flops_per_second:,.2f}")
-                args.tboard_writer.add_scalar('Performance/total_flops', total_flops, iters)
-                args.tboard_writer.add_scalar('Performance/flops_per_second', flops_per_second, iters)
                 
             if iters % 100 == 0:  # Every 100 iterations
                 comm_stats = time_communication(comm, device)
@@ -514,7 +477,15 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             args.tboard_writer.add_scalar("Loss/valid", val_loss, iters)
             args.tboard_writer.add_scalar("Avg val iters per sec", val_iters_per_sec, iters)
             args.tboard_writer.add_scalar("Avg val samples per sec", val_samples_per_sec, iters)
-            args.tboard_writer.add_scalar("RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters)
+            args.tboard_writer.add_scalar(
+                "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], iters
+            )
+            total_flops += flops_per_step
+            flops_per_second = total_flops / elapsed_time
+            logging.info(f"Total FLOPs: {total_flops:,}")
+            logging.info(f"FLOPS/second: {flops_per_second:,.2f}")
+            args.tboard_writer.add_scalar('Performance/total_flops', total_flops, iters)
+            args.tboard_writer.add_scalar('Performance/flops_per_second', flops_per_second, iters)
             args.tboard_writer.flush()
         if iters >= params.num_iters:
             break
@@ -528,67 +499,64 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
 def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank):
     """Save training checkpoint with model parallel support"""
-    # Early return for non-zero ranks
-    if world_rank != 0:
-        return
-        
-    # Save model configuration and training state
-    checkpoint = {
-        'model_state_dict': model.module.state_dict() if hasattr(model, 'module') else model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'scheduler_state_dict': scheduler.state_dict() if scheduler is not None else None,
-        'iters': iters,
-        # Save model parallel configuration
-        'parallel_config': {
-            'tp_size': params.get('tp', 1),
-            'cp_size': params.get('cp', 1),
-            'parallel_order': params.get('order', 'tp-cp-dp'),
-        },
-        # Save model architecture config
-        'model_config': {
-            'embed_dim': params.embed_dim,
-            'depth': params.depth,
-            'num_heads': params.num_heads,
-            'patch_size': params.patch_size,
-        },
-        # Save training config
-        'training_config': {
-            'amp_dtype': str(params.amp_dtype),
-            'global_batch_size': params.global_batch_size,
-            'local_batch_size': params.local_batch_size,
+    if world_rank == 0:
+        # Save model configuration and training state
+        checkpoint = {
+            'model_state_dict': model.module.state_dict() if hasattr(model, 'module') else model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict() if scheduler is not None else None,
+            'iters': iters,
+            # Save model parallel configuration
+            'parallel_config': {
+                'tp_size': params.get('tp', 1),
+                'cp_size': params.get('cp', 1),
+                'parallel_order': params.get('order', 'tp-cp-dp'),
+            },
+            # Save model architecture config
+            'model_config': {
+                'embed_dim': params.embed_dim,
+                'depth': params.depth,
+                'num_heads': params.num_heads,
+                'patch_size': params.patch_size,
+            },
+            # Save training config
+            'training_config': {
+                'amp_dtype': str(params.amp_dtype),
+                'global_batch_size': params.global_batch_size,
+                'local_batch_size': params.local_batch_size,
+            }
         }
-    }
-    
-    # Save to temporary file first
-    temp_checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt.tmp')
-    checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt')
-    torch.save(checkpoint, temp_checkpoint_path)
-    # Atomic rename to avoid corrupted checkpoints
-    os.rename(temp_checkpoint_path, checkpoint_path)
-    
-    # Save latest checkpoint symlink
-    latest_path = os.path.join(params.experiment_dir, 'checkpoint_latest.pt')
-    if os.path.exists(latest_path):
-        os.remove(latest_path)
-    os.symlink(f'checkpoint_{iters}.pt', latest_path)
-    
-    logging.info(f"Saved checkpoint at iteration {iters} to {checkpoint_path}")
-    
-    # Cleanup old checkpoints if needed
-    if hasattr(params, 'keep_n_checkpoints'):
-        try:
-            checkpoint_files = sorted([
-                f for f in os.listdir(params.experiment_dir) 
-                if f.startswith('checkpoint_') and f.endswith('.pt') and not f == 'checkpoint_latest.pt'
-            ])
-            for old_ckpt in checkpoint_files[:-params.keep_n_checkpoints]:
-                try:
-                    os.remove(os.path.join(params.experiment_dir, old_ckpt))
-                    logging.info(f"Removed old checkpoint: {old_ckpt}")
-                except OSError as e:
-                    logging.warning(f"Failed to remove checkpoint {old_ckpt}: {e}")
-        except Exception as e:
-            logging.warning(f"Error during checkpoint cleanup: {e}")
+        
+        # Save to temporary file first
+        temp_checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt.tmp')
+        checkpoint_path = os.path.join(params.experiment_dir, f'checkpoint_{iters}.pt')
+        torch.save(checkpoint, temp_checkpoint_path)
+        # Atomic rename to avoid corrupted checkpoints
+        os.rename(temp_checkpoint_path, checkpoint_path)
+        
+        # Save latest checkpoint symlink
+        latest_path = os.path.join(params.experiment_dir, 'checkpoint_latest.pt')
+        if os.path.exists(latest_path):
+            os.remove(latest_path)
+        os.symlink(f'checkpoint_{iters}.pt', latest_path)
+        
+        logging.info(f"Saved checkpoint at iteration {iters} to {checkpoint_path}")
+        
+        # Cleanup old checkpoints if needed
+        if hasattr(params, 'keep_n_checkpoints'):
+            try:
+                checkpoint_files = sorted([
+                    f for f in os.listdir(params.experiment_dir) 
+                    if f.startswith('checkpoint_') and f.endswith('.pt') and not f == 'checkpoint_latest.pt'
+                ])
+                for old_ckpt in checkpoint_files[:-params.keep_n_checkpoints]:
+                    try:
+                        os.remove(os.path.join(params.experiment_dir, old_ckpt))
+                        logging.info(f"Removed old checkpoint: {old_ckpt}")
+                    except OSError as e:
+                        logging.warning(f"Failed to remove checkpoint {old_ckpt}: {e}")
+            except Exception as e:
+                logging.warning(f"Error during checkpoint cleanup: {e}")
 
 def validate_checkpoint_config(checkpoint, params, world_rank):
     """Validate checkpoint configuration matches current setup"""
@@ -794,6 +762,7 @@ if __name__ == "__main__":
         params.experiment_dir = os.path.abspath(expDir)
 
         # Setup data
+        clean_up_temp_dirs(params.n_train)
         data_subset(params.n_train)
         params.train_data_path = str(TEMP_TRAIN/str(params.n_train))
         params.valid_data_path = str(TEMP_VAL/str(params.n_train))
@@ -818,13 +787,11 @@ if __name__ == "__main__":
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
-    # All ranks wait for rank 0 to finish setup
-    if params.distributed:
-        torch.distributed.barrier()
 
-    logging.info(f"[{world_rank}] Machine: {os.environ['MACHINE']}")
     train(params, args, local_rank, world_rank, world_size)
     
     if params.distributed:
         torch.distributed.barrier()
     logging.info("DONE ---- rank %d" % world_rank)
+    if world_rank == 0:
+        clean_up_temp_dirs(params.n_train)

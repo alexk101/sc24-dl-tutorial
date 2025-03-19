@@ -30,18 +30,18 @@ trap 'cleanup_handler' USR1
 # Set up the data and log directories
 # DATADIR=/pscratch/sd/a/akiefer/era5
 export DATADIR=/lustre/orion/geo163/proj-shared/downsampled_data
-# export DATADIR=/lustre/orion/geo163/proj-shared/fullsize_data
 export SCRATCH=/lustre/orion/geo163/scratch/kiefera
 export MACHINE=frontier
 
 # RCCL
-export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRARY_PATH
+# export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRARY_PATH
 
 # Needed to bypass MIOpen, Disk I/O Errors
-export MIOPEN_USER_DB_PATH="/tmp/my-miopen-cache-$SLURM_JOB_ID"
-export MIOPEN_CUSTOM_CACHE_DIR=${MIOPEN_USER_DB_PATH}
-rm -rf ${MIOPEN_USER_DB_PATH}
-mkdir -p ${MIOPEN_USER_DB_PATH}
+# export MIOPEN_USER_DB_PATH="/tmp/my-miopen-cache-$SLURM_JOB_ID"
+# export MIOPEN_CUSTOM_CACHE_DIR=${MIOPEN_USER_DB_PATH}
+# rm -rf ${MIOPEN_USER_DB_PATH}
+# mkdir -p ${MIOPEN_USER_DB_PATH}
+export MIOPEN_DISABLE_CACHE=1
 
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
