@@ -2,8 +2,8 @@
 
 # Base configuration
 BASE_CONFIG="mp"
-BASE_NODES=4
-TIME_LIMIT="03:00:00"
+BASE_NODES=128
+TIME_LIMIT="12:00:00"
 BASE_BATCH_SIZE=8
 
 # Arrays for parameter sweeps
@@ -13,7 +13,7 @@ DT_VALUES=(1 2 4 8)
 TRAIN_YEARS=(1 5 10 15 20 25)
 NODE_COUNTS=(1 2 4 8)
 AMP_MODES=("none" "fp16" "bf16")
-BATCH_SIZES=(1 2 4 8 16 32)
+BATCH_SIZES=(1 2 4 8 16 32 64)
 PATCH_SIZES=(2 4 8 16)
 
 # Calculate compute hours at risk
