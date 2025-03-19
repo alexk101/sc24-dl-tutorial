@@ -520,6 +520,7 @@ def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank
                 'depth': params.depth,
                 'num_heads': params.num_heads,
                 'patch_size': params.patch_size,
+                'gradient_checkpointing': params.gradient_checkpointing,
             },
             # Save training config
             'training_config': {
@@ -576,7 +577,7 @@ def validate_checkpoint_config(checkpoint, params, world_rank):
             )
             
         # Check model architecture
-        for key in ['embed_dim', 'depth', 'num_heads', 'patch_size']:
+        for key in ['embed_dim', 'depth', 'num_heads', 'patch_size', 'gradient_checkpointing']:
             ckpt_val = checkpoint['model_config'][key]
             current_val = getattr(params, key)
             if ckpt_val != current_val:
