@@ -389,6 +389,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             step_count += 1
             iters += 1
 
+            # Regular checkpointing
+            if iters % args.checkpoint_freq == 0:
+                if world_rank == 0:
+                    logging.info(f"Saving checkpoint at iteration {iters}")
+                save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
+                if params.distributed:
+                    torch.distributed.barrier()  # Ensure all processes wait for checkpoint to complete
+
             if hyperparameter_search and (iters % val_freq == 0):
                 val_loss, val_rmse, _ = validate_model(
                     model, val_data_loader, device, params,
@@ -402,6 +410,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 if val_rmse.cpu().numpy()[0] < best_val_rmse:
                     best_val_rmse = val_rmse.cpu().numpy()[0]
                     patience_counter = 0
+                    # Save best model checkpoint
+                    if world_rank == 0:
+                        logging.info(f"Saving best model checkpoint at iteration {iters}")
+                    save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
+                    if params.distributed:
+                        torch.distributed.barrier()
                 else:
                     patience_counter += 1
                 
