@@ -91,7 +91,7 @@ echo "Running Model Scaling Experiments..."
 echo "Running depth scaling experiments..."
 for scale in "${SCALE_FACTORS[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -111,7 +111,7 @@ done
 echo "Running attention heads scaling experiments..."
 for scale in "${SCALE_FACTORS[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -130,7 +130,7 @@ done
 # Embedding Size Scaling
 for dim in "${EMBED_DIMS[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -149,7 +149,7 @@ done
 # Sequence Length Scaling
 for dt in "${DT_VALUES[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -170,7 +170,7 @@ done
 echo "Running Patch Size Scaling Experiments..."
 for patch_size in "${PATCH_SIZES[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -193,7 +193,7 @@ echo "Running Data Scaling Experiments..."
 # Dataset Size Scaling
 for years in "${TRAIN_YEARS[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -215,7 +215,7 @@ echo "Running Compute Resource Scaling Experiments..."
 # GPU Count Scaling
 for nodes in "${NODE_COUNTS[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT_2}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT_2}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${nodes} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -234,7 +234,7 @@ done
 # Memory Optimization Experiments
 for amp_mode in "${AMP_MODES[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -258,7 +258,7 @@ echo "Running Training & Inference Efficiency Experiments..."
 # Precision Scaling
 for amp_mode in "${AMP_MODES[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -278,7 +278,7 @@ done
 # Batch Size Scaling
 for batch_size in "${BATCH_SIZES[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
-    sed "s/#SBATCH --time=00:30:00/#SBATCH --time=${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
+    sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
