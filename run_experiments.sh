@@ -12,7 +12,7 @@ SCALE_FACTORS=(1 2 4 8)
 EMBED_DIMS=(128 256 512 1024)
 DT_VALUES=(1 2 4 8)
 TRAIN_YEARS=(1 5 10 15 20 25)
-NODE_COUNTS=(1 2 4 8)
+NODE_COUNTS=(1 2 4 8 16)
 AMP_MODES=("none" "fp16" "bf16")
 BATCH_SIZES=(1 2 4 8 16 32 64)
 PATCH_SIZES=(2 4 8 16)
@@ -102,7 +102,8 @@ for scale in "${SCALE_FACTORS[@]}"; do
         --n_train=25 \
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
-        --n_nodes=${BASE_NODES}
+        --n_nodes=${BASE_NODES} \
+        --exp_name="depth_scaling"
     
     rm "${temp_script}"
 done
@@ -122,8 +123,9 @@ for scale in "${SCALE_FACTORS[@]}"; do
         --n_train=25 \
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
-        --n_nodes=${BASE_NODES}
-    
+        --n_nodes=${BASE_NODES} \
+        --exp_name="heads_scaling"
+
     rm "${temp_script}"
 done
 
@@ -141,7 +143,8 @@ for dim in "${EMBED_DIMS[@]}"; do
         --n_train=25 \
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
-        --n_nodes=${BASE_NODES}
+        --n_nodes=${BASE_NODES} \
+        --exp_name="embedding_scaling"
     
     rm "${temp_script}"
 done
@@ -161,7 +164,8 @@ for dt in "${DT_VALUES[@]}"; do
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
-        --dt=${dt}
+        --dt=${dt} \
+        --exp_name="dt_scaling"
     
     rm "${temp_script}"
 done
@@ -182,7 +186,8 @@ for patch_size in "${PATCH_SIZES[@]}"; do
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
-        --patch_size=${patch_size}
+        --patch_size=${patch_size} \
+        --exp_name="patch_size_scaling"
     
     rm "${temp_script}"
 done
@@ -204,7 +209,8 @@ for years in "${TRAIN_YEARS[@]}"; do
         --n_train=${years} \
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
-        --n_nodes=${BASE_NODES}
+        --n_nodes=${BASE_NODES} \
+        --exp_name="data_scaling"
     
     rm "${temp_script}"
 done
@@ -226,7 +232,8 @@ for nodes in "${NODE_COUNTS[@]}"; do
         --n_train=25 \
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
-        --n_nodes=${nodes}
+        --n_nodes=${nodes} \
+        --exp_name="gpu_count_scaling"
     
     rm "${temp_script}"
 done
@@ -247,7 +254,8 @@ for amp_mode in "${AMP_MODES[@]}"; do
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
         --amp_mode=${amp_mode} \
-        --gradient_checkpointing
+        --gradient_checkpointing \
+        --exp_name="amp_mode_scaling_gc"
     
     rm "${temp_script}"
 done
@@ -270,7 +278,8 @@ for amp_mode in "${AMP_MODES[@]}"; do
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
-        --amp_mode=${amp_mode}
+        --amp_mode=${amp_mode} \
+        --exp_name="amp_mode_scaling"
     
     rm "${temp_script}"
 done
@@ -289,7 +298,8 @@ for batch_size in "${BATCH_SIZES[@]}"; do
         --n_train=25 \
         --local_batch_size=${batch_size} \
         --num_data_workers=1 \
-        --n_nodes=${BASE_NODES}
+        --n_nodes=${BASE_NODES} \
+        --exp_name="batch_size_scaling"
     
     rm "${temp_script}"
 done

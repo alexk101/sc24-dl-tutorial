@@ -783,6 +783,7 @@ if __name__ == "__main__":
         args.tboard_writer = SummaryWriter(log_dir=os.path.join(str(expDir), "logs/"))
         
         hparams = {
+            'exp_name': args.exp_name,
             'embed': args.scale_dim,
             'layers': args.scale_depth,
             'heads': args.scale_heads,
