@@ -681,7 +681,7 @@ if __name__ == "__main__":
     parser.add_argument("--patch_size", type=int, default=None, help="Override the default patch size")
     parser.add_argument("--gradient_checkpointing", action="store_true", help="Enable gradient checkpointing to save memory")
     parser.add_argument("--keep_n_checkpoints", type=int, default=3, help="Number of checkpoints to keep")
-
+    parser.add_argument("--output_dir", type=str, default=None, help="Output directory")
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
@@ -697,6 +697,8 @@ if __name__ == "__main__":
         params.lr = args.learning_rate
     if args.patch_size is not None:
         params.patch_size = args.patch_size
+
+    assert params.output_dir is not None, "Output directory must be specified"
     ########
 
     # Update config with modified args
@@ -769,10 +771,7 @@ if __name__ == "__main__":
         baseDir = Path(SCRATCH) / 'scaling_logs'
         if not baseDir.exists():
             baseDir.mkdir(exist_ok=True, parents=True)
-
-        existing = [int(x.name) for x in baseDir.iterdir()]
-        run_num = str(int(time.time()))
-        expDir: Path = baseDir / run_num
+        expDir: Path = baseDir / params.output_dir
         expDir.mkdir()
         params.experiment_dir = os.path.abspath(expDir)
 
