@@ -87,9 +87,6 @@ def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
         if world_rank == 0:
             save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
             logging.info("Time limit approaching - saved checkpoint and exiting")
-        if params.distributed:
-            torch.distributed.barrier()  # Ensure all processes finish saving
-            destroy_process_group(None)
         sys.exit(0)
     except Exception as e:
         logging.error(f"Error during save_and_exit: {e}")
@@ -325,21 +322,21 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
                 
             
-            if world_rank == 0 and profiler:
+            if world_rank == 0 and profiler is not None:
                 if epoch == 3 and i == 0:
                     torch.cuda.profiler.start()
                 if epoch == 3 and i == len(train_data_loader) - 1:
                     torch.cuda.profiler.stop()
 
-            if profiler:
+            if profiler is not None:
                 profiler.range_push(f"step {i}")
             
             dat_start = time.time()
-            if profiler:
+            if profiler is not None:
                 profiler.range_push(f"data copy in {i}")
 
             inp, tar = map(lambda x: x.to(device), data)
-            if profiler:
+            if profiler is not None:
                 profiler.range_pop()  # copy in
 
             tr_start = time.time()
@@ -347,12 +344,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             optimizer.zero_grad()
 
-            if profiler:
+            if profiler is not None:
                 profiler.range_push(f"forward")
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
                 loss = loss_func(gen, tar)
-            if profiler:
+            if profiler is not None:
                 profiler.range_pop()  # forward
 
             if world_rank == 0 and i == 1:  # print the mem used
@@ -362,10 +359,10 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             if params.amp_dtype == torch.float16:
                 scaler.scale(loss).backward()
-                if profiler:
+                if profiler is not None:
                     profiler.range_push(f"optimizer")
                 scaler.step(optimizer)
-                if profiler:
+                if profiler is not None:
                     profiler.range_pop()  # optimizer
                 scaler.update()
             else:
@@ -383,7 +380,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 )
             tr_loss.append(loss.item())
 
-            if profiler:
+            if profiler is not None:
                 profiler.range_pop()  # step
             # lr step
             scheduler.step()
@@ -399,8 +396,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 if world_rank == 0:
                     logging.info(f"Saving checkpoint at iteration {iters}")
                     save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
-                if params.distributed:
-                    torch.distributed.barrier()  # Ensure all processes wait for checkpoint to complete
 
             if hyperparameter_search and (iters % val_freq == 0):
                 val_loss, val_rmse, _ = validate_model(
@@ -418,8 +413,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     if world_rank == 0:
                         logging.info(f"Saving best model checkpoint at iteration {iters}")
                         save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
-                    if params.distributed:
-                        torch.distributed.barrier()
                 else:
                     patience_counter += 1
                 
