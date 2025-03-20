@@ -680,6 +680,8 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=None, help="Override the default learning rate")
     parser.add_argument("--patch_size", type=int, default=None, help="Override the default patch size")
     parser.add_argument("--gradient_checkpointing", action="store_true", help="Enable gradient checkpointing to save memory")
+    parser.add_argument("--keep_n_checkpoints", type=int, default=3, help="Number of checkpoints to keep")
+
 
     args = parser.parse_args()
     params = YParams(os.path.abspath(args.yaml_config), args.config)
@@ -690,6 +692,7 @@ if __name__ == "__main__":
     params.depth = args.scale_depth
     params.num_heads = args.scale_heads
     params.n_train = args.n_train
+    params.keep_n_checkpoints = args.keep_n_checkpoints
     if args.learning_rate is not None:
         params.lr = args.learning_rate
     if args.patch_size is not None:
