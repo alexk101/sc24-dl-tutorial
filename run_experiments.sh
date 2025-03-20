@@ -104,7 +104,8 @@ for scale in "${SCALE_FACTORS[@]}"; do
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
-        --exp_name="depth_scaling"
+        --exp_name="depth_scaling" \
+        --output_dir="depth_scaling_${scale}"
     
     rm "${temp_script}"
 done
@@ -114,7 +115,6 @@ echo "Running attention heads scaling experiments..."
 for scale in "${SCALE_FACTORS[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
     sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
-    export EXP_NAME="heads_scaling_${scale}"
     
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
@@ -126,7 +126,8 @@ for scale in "${SCALE_FACTORS[@]}"; do
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
-        --exp_name="heads_scaling"
+        --exp_name="heads_scaling" \
+        --output_dir="heads_scaling_${scale}"
 
     rm "${temp_script}"
 done
@@ -147,7 +148,8 @@ for dim in "${EMBED_DIMS[@]}"; do
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
-        --exp_name="embedding_scaling"
+        --exp_name="embedding_scaling" \
+        --output_dir="embedding_scaling_${dim}"
     
     rm "${temp_script}"
 done
@@ -169,7 +171,8 @@ for dt in "${DT_VALUES[@]}"; do
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
         --dt=${dt} \
-        --exp_name="dt_scaling"
+        --exp_name="dt_scaling" \
+        --output_dir="dt_scaling_${dt}"
     
     rm "${temp_script}"
 done
@@ -180,7 +183,7 @@ for patch_size in "${PATCH_SIZES[@]}"; do
     temp_script="submit_frontier_${RANDOM}.sh"
     sed "s/#SBATCH -t 00:30:00/#SBATCH -t ${TIME_LIMIT}/" submit_frontier.sh > "${temp_script}"
     export EXP_NAME="patch_size_scaling_${patch_size}"
-    
+
     sbatch --nodes ${BASE_NODES} "${temp_script}" \
         --config=${BASE_CONFIG} \
         --tensor_parallel=4 \
@@ -192,7 +195,8 @@ for patch_size in "${PATCH_SIZES[@]}"; do
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
         --patch_size=${patch_size} \
-        --exp_name="patch_size_scaling"
+        --exp_name="patch_size_scaling" \
+        --output_dir="patch_size_scaling_${patch_size}"
     
     rm "${temp_script}"
 done
@@ -216,7 +220,8 @@ for years in "${TRAIN_YEARS[@]}"; do
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
-        --exp_name="data_scaling"
+        --exp_name="data_scaling" \
+        --output_dir="data_scaling_${years}"
     
     rm "${temp_script}"
 done
@@ -240,7 +245,8 @@ for nodes in "${NODE_COUNTS[@]}"; do
         --local_batch_size=${BASE_BATCH_SIZE} \
         --num_data_workers=1 \
         --n_nodes=${nodes} \
-        --exp_name="gpu_count_scaling"
+        --exp_name="gpu_count_scaling" \
+        --output_dir="gpu_count_scaling_${nodes}"
     
     rm "${temp_script}"
 done
@@ -263,7 +269,8 @@ for amp_mode in "${AMP_MODES[@]}"; do
         --n_nodes=${BASE_NODES} \
         --amp_mode=${amp_mode} \
         --gradient_checkpointing \
-        --exp_name="amp_mode_scaling_gc"
+        --exp_name="amp_mode_scaling_gc" \
+        --output_dir="amp_mode_scaling_gc_${amp_mode}"
     
     rm "${temp_script}"
 done
@@ -288,7 +295,8 @@ for amp_mode in "${AMP_MODES[@]}"; do
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
         --amp_mode=${amp_mode} \
-        --exp_name="amp_mode_scaling"
+        --exp_name="amp_mode_scaling" \
+        --output_dir="amp_mode_scaling_${amp_mode}"
     
     rm "${temp_script}"
 done
@@ -309,7 +317,8 @@ for batch_size in "${BATCH_SIZES[@]}"; do
         --local_batch_size=${batch_size} \
         --num_data_workers=1 \
         --n_nodes=${BASE_NODES} \
-        --exp_name="batch_size_scaling"
+        --exp_name="batch_size_scaling" \
+        --output_dir="batch_size_scaling_${batch_size}"
     
     rm "${temp_script}"
 done
