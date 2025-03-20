@@ -515,7 +515,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
 def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank):
     """Save training checkpoint with model parallel support"""
-    if world_rank == 0:
+    if world_rank == 0:  # Only rank 0 should handle file operations
         # Save model configuration and training state
         checkpoint = {
             'model_state_dict': model.module.state_dict() if hasattr(model, 'module') else model.state_dict(),
@@ -562,10 +562,17 @@ def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank
         # Cleanup old checkpoints if needed
         if hasattr(params, 'keep_n_checkpoints'):
             try:
-                checkpoint_files = sorted([
-                    f for f in os.listdir(params.experiment_dir) 
-                    if f.startswith('checkpoint_') and f.endswith('.pt') and not f == 'checkpoint_latest.pt'
-                ])
+                # Get all checkpoint files except the symlink
+                checkpoint_files = []
+                for f in os.listdir(params.experiment_dir):
+                    if f.startswith('checkpoint_') and f.endswith('.pt'):
+                        if os.path.isfile(os.path.join(params.experiment_dir, f)) and not os.path.islink(os.path.join(params.experiment_dir, f)):
+                            checkpoint_files.append(f)
+                
+                # Sort by iteration number
+                checkpoint_files.sort(key=lambda x: int(x.split('_')[1].split('.')[0]))
+                
+                # Remove old checkpoints
                 for old_ckpt in checkpoint_files[:-params.keep_n_checkpoints]:
                     try:
                         os.remove(os.path.join(params.experiment_dir, old_ckpt))
@@ -574,6 +581,7 @@ def save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank
                         logging.warning(f"Failed to remove checkpoint {old_ckpt}: {e}")
             except Exception as e:
                 logging.warning(f"Error during checkpoint cleanup: {e}")
+
 
 def validate_checkpoint_config(checkpoint, params, world_rank):
     """Validate checkpoint configuration matches current setup"""
