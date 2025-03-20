@@ -393,7 +393,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             if iters % args.checkpoint_freq == 0:
                 if world_rank == 0:
                     logging.info(f"Saving checkpoint at iteration {iters}")
-                save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
+                    save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
                 if params.distributed:
                     torch.distributed.barrier()  # Ensure all processes wait for checkpoint to complete
 
@@ -410,10 +410,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 if val_rmse.cpu().numpy()[0] < best_val_rmse:
                     best_val_rmse = val_rmse.cpu().numpy()[0]
                     patience_counter = 0
-                    # Save best model checkpoint
                     if world_rank == 0:
                         logging.info(f"Saving best model checkpoint at iteration {iters}")
-                    save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
+                        save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
                     if params.distributed:
                         torch.distributed.barrier()
                 else:
