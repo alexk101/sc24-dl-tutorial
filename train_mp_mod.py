@@ -13,7 +13,7 @@ from utils import get_data_loader_distributed
 from utils import comm
 from utils.loss import l2_loss, l2_loss_opt
 from utils.metrics import weighted_rmse, time_communication, backward_with_comm_timing
-from utils.data import data_subset, clean_up_temp_dirs, TEMP_TRAIN, TEMP_VAL, SCRATCH
+from utils.data import TEMP_TRAIN, TEMP_VAL, SCRATCH
 from networks import vit
 
 from distributed.mappings import init_ddp_model_and_reduction_hooks
@@ -84,8 +84,8 @@ def get_remaining_time():
 def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
     """Save checkpoint and exit gracefully"""
     try:
-        save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
         if world_rank == 0:
+            save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
             logging.info("Time limit approaching - saved checkpoint and exiting")
         if params.distributed:
             torch.distributed.barrier()  # Ensure all processes finish saving
@@ -97,6 +97,7 @@ def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
 
 # Get profiler once at module level
 profiler = get_profiler()
+# profiler = None
 
 def validate_model(model, val_loader, device, params, loss_func, world_rank, comm=None):
     model.eval()
@@ -283,8 +284,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         logging.info(f"Will check remaining time every {time_check_freq} iterations")
 
     # Get initial FLOP count with a sample input
-    def count_training_flops(model, sample_input, loss_func):
-        flop_counter = FlopCounterMode()
+    def count_training_flops(model, sample_input, loss_func, world_rank):
+        if world_rank == 0:
+            flop_counter = FlopCounterMode()
+        else:
+            flop_counter = FlopCounterMode(display=False)
         with flop_counter:
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 output = model(sample_input)
@@ -294,7 +298,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     sample_input = next(iter(train_data_loader))[0].to(device)
     model.train()
-    flops_per_step = count_training_flops(model, sample_input, loss_func)
+    flops_per_step = count_training_flops(model, sample_input, loss_func, world_rank)
     total_flops = 0
 
     if world_rank == 0:
@@ -320,7 +324,8 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     logging.info("Reached maximum iterations, initiating shutdown...")
                 save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
                 
-            if world_rank == 0:
+            
+            if world_rank == 0 and profiler:
                 if epoch == 3 and i == 0:
                     torch.cuda.profiler.start()
                 if epoch == 3 and i == len(train_data_loader) - 1:
@@ -439,7 +444,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                         logging.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
                     save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
                 
-            if iters % 100 == 0:  # Every 100 iterations
                 comm_stats = time_communication(comm, device)
                 if world_rank == 0:
                     logging.info(f"Communication stats: {comm_stats}")
@@ -760,15 +764,13 @@ if __name__ == "__main__":
     if world_rank == 0:
         # Directory setup
         baseDir = Path(SCRATCH) / 'scaling_logs'
-        baseDir.mkdir(exist_ok=True, parents=True)
+        if not baseDir.exists():
+            baseDir.mkdir(exist_ok=True, parents=True)
 
         existing = [int(x.name) for x in baseDir.iterdir()]
-        if existing:
-            run_num = str(max(existing)+1).zfill(3)
-        else:
-            run_num = '000'
+        run_num = str(int(time.time()))
         expDir: Path = baseDir / run_num
-        expDir.mkdir(exist_ok=True, parents=True)
+        expDir.mkdir()
         params.experiment_dir = os.path.abspath(expDir)
 
         # Setup data paths
