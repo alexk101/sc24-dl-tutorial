@@ -306,6 +306,8 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
         step_count = 0
 
         for i, data in enumerate(train_data_loader, 0):
+            logging.info(f"Rank {world_rank} starting iteration {iters}")
+            
             if iters >= params.num_iters:
                 if world_rank == 0:
                     logging.info("Reached maximum iterations, initiating shutdown...")
@@ -319,7 +321,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
+                logging.info(f"Rank {world_rank} starting forward pass for iter {iters}")
                 loss = loss_func(gen, tar)
+                logging.info(f"Rank {world_rank} completed forward pass for iter {iters}")
 
             if world_rank == 0 and i == 1:  # print the mem used
                 gpu_info = get_gpu_info(local_rank)
@@ -332,7 +336,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 scaler.update()
             else:
                 # Replace with timing instrumentation
+                logging.info(f"Rank {world_rank} starting backward timing pass for iter {iters}")
                 timing_stats = backward_with_comm_timing(loss, optimizer)
+                logging.info(f"Rank {world_rank} completed backward timing pass for iter {iters}")
                 if world_rank == 0 and iters % params.logging_freq == 0:
                     logging.info(f"Backward timing: compute={timing_stats['backward_compute_time']:.4f}s, "
                                  f"comm={timing_stats['comm_time']:.4f}s, "
@@ -387,11 +393,12 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             # Check remaining time periodically
             if iters % time_check_freq == 0:
+                logging.info(f"Rank {world_rank} checking remaining time for iter {iters}")
                 if world_rank == 0:
                     remaining_time = torch.tensor(get_remaining_time(), device=device)
                 else:
                     remaining_time = torch.tensor(0.0, device=device)
-                    
+                logging.info(f"Rank {world_rank} broadcasting remaining time for iter {iters}")
                 if params.distributed:
                     torch.distributed.broadcast(remaining_time, src=0)
                 
@@ -399,8 +406,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                     if world_rank == 0:
                         logging.info(f"Time limit approaching (remaining: {remaining_time.item():.1f}s)")
                     save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
-                
+                logging.info(f"Rank {world_rank} checking communication stats for iter {iters}")
                 comm_stats = time_communication(comm, device)
+                logging.info(f"Rank {world_rank} logging communication stats for iter {iters}")
                 if world_rank == 0:
                     logging.info(f"Communication stats: {comm_stats}")
                     args.tboard_writer.add_scalar("Comm/all_reduce_time_ms", comm_stats["all_reduce_time_ms"], iters)
@@ -431,11 +439,13 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
 
         val_start = time.time()
+        logging.info(f"Rank {world_rank} starting validation")
         val_loss, val_rmse, valid_steps = validate_model(
             model, val_data_loader, device, params, 
             loss_func, world_rank, comm if params.distributed else None
         )
         val_end = time.time()
+        logging.info(f"Rank {world_rank} completed validation")
         if world_rank == 0:
             elapsed_time = time.time() - start_time
             remaining_time = get_remaining_time()
