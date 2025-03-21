@@ -339,7 +339,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                                  f"ratio={timing_stats['comm_ratio']:.2%}")
                     args.tboard_writer.add_scalar("Performance/comm_ratio", timing_stats["comm_ratio"], iters)
 
-            logging.info(f"Rank {world_rank} Loss: {loss.item()}")
+            logging.info(f"Rank {world_rank} {iters} Loss: {loss.item()}")
             if params.distributed:
                 torch.distributed.all_reduce(
                     loss, op=ReduceOp.AVG, group=comm.get_group("dp")
