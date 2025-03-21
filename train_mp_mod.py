@@ -319,6 +319,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             b_size = inp.size(0)
             optimizer.zero_grad()
 
+            # Inside the training loop, before forward pass
+            logging.info(f"Rank {world_rank} waiting for TP group sync before forward at iter {iters}")
+            torch.distributed.barrier(group=comm.get_group("tp"))
+            logging.info(f"Rank {world_rank} passed TP group sync before forward at iter {iters}")
+
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
                 logging.info(f"Rank {world_rank} starting forward pass for iter {iters}")
@@ -353,6 +358,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             tr_loss.append(loss.item())
 
             scheduler.step()
+
+            # After backward pass
+            logging.info(f"Rank {world_rank} waiting for TP group sync after backward at iter {iters}")
+            torch.distributed.barrier(group=comm.get_group("tp"))
+            logging.info(f"Rank {world_rank} passed TP group sync after backward at iter {iters}")
 
             tr_end = time.time()
             tr_time += tr_end - tr_start
