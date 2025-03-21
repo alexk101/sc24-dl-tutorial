@@ -359,7 +359,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             scheduler.step()
 
-            # After backward pass
+            # After backward pass but before the iteration ends
             logging.info(f"Rank {world_rank} waiting for TP group sync after backward at iter {iters}")
             torch.distributed.barrier(group=comm.get_group("tp"))
             logging.info(f"Rank {world_rank} passed TP group sync after backward at iter {iters}")
@@ -369,8 +369,13 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             dat_time += tr_start - dat_start
             step_count += 1
 
-            # Add global barrier between iterations
+            # First synchronize within data parallel groups
             if params.distributed:
+                logging.info(f"Rank {world_rank} waiting for DP group sync at end of iter {iters}")
+                torch.distributed.barrier(group=comm.get_group("dp"))
+                logging.info(f"Rank {world_rank} passed DP group sync at end of iter {iters}")
+
+                # Then do a global sync
                 logging.info(f"Rank {world_rank} waiting for global sync at end of iter {iters}")
                 torch.distributed.barrier()  # Global barrier
                 logging.info(f"Rank {world_rank} passed global sync at end of iter {iters}")
