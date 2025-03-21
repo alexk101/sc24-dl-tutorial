@@ -35,7 +35,7 @@ from torch.amp import autocast, GradScaler
 import torch
 from utils.gpu_utils import (
     NVIDIA_AVAILABLE, ROCM_AVAILABLE, GPU_BACKEND, 
-    get_gpu_info, initialize_gpu, get_profiler
+    get_gpu_info, initialize_gpu
 )
 
 
@@ -91,10 +91,6 @@ def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
     except Exception as e:
         logging.error(f"Error during save_and_exit: {e}")
         sys.exit(1)
-
-# Get profiler once at module level
-profiler = get_profiler()
-# profiler = None
 
 def validate_model(model, val_loader, device, params, loss_func, world_rank, comm=None):
     model.eval()
@@ -248,12 +244,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             torch.distributed.all_reduce(
                 tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
             )
-            torch.distributed.all_reduce(
-                val_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
-            )
-            torch.distributed.all_reduce(
-                val_rmse, op=ReduceOp.AVG, group=comm.get_group("dp")
-            )
         if world_rank == 0:
             args.tboard_writer.add_scalar("Loss/train", tr_loss.item(), 0)
             args.tboard_writer.add_scalar("Loss/valid", val_loss.item(), 0)
@@ -320,37 +310,16 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 if world_rank == 0:
                     logging.info("Reached maximum iterations, initiating shutdown...")
                 save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank)
-                
-            
-            if world_rank == 0 and profiler is not None:
-                if epoch == 3 and i == 0:
-                    torch.cuda.profiler.start()
-                if epoch == 3 and i == len(train_data_loader) - 1:
-                    torch.cuda.profiler.stop()
 
-            if profiler is not None:
-                profiler.range_push(f"step {i}")
-            
             dat_start = time.time()
-            if profiler is not None:
-                profiler.range_push(f"data copy in {i}")
-
             inp, tar = map(lambda x: x.to(device), data)
-            if profiler is not None:
-                profiler.range_pop()  # copy in
-
             tr_start = time.time()
             b_size = inp.size(0)
-
             optimizer.zero_grad()
 
-            if profiler is not None:
-                profiler.range_push(f"forward")
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
                 loss = loss_func(gen, tar)
-            if profiler is not None:
-                profiler.range_pop()  # forward
 
             if world_rank == 0 and i == 1:  # print the mem used
                 gpu_info = get_gpu_info(local_rank)
@@ -359,11 +328,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             if params.amp_dtype == torch.float16:
                 scaler.scale(loss).backward()
-                if profiler is not None:
-                    profiler.range_push(f"optimizer")
                 scaler.step(optimizer)
-                if profiler is not None:
-                    profiler.range_pop()  # optimizer
                 scaler.update()
             else:
                 # Replace with timing instrumentation
@@ -380,9 +345,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 )
             tr_loss.append(loss.item())
 
-            if profiler is not None:
-                profiler.range_pop()  # step
-            # lr step
             scheduler.step()
 
             tr_end = time.time()
