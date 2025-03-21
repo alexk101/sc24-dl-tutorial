@@ -368,6 +368,13 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             tr_time += tr_end - tr_start
             dat_time += tr_start - dat_start
             step_count += 1
+
+            # Add global barrier between iterations
+            if params.distributed:
+                logging.info(f"Rank {world_rank} waiting for global sync at end of iter {iters}")
+                torch.distributed.barrier()  # Global barrier
+                logging.info(f"Rank {world_rank} passed global sync at end of iter {iters}")
+
             iters += 1
 
             # Regular checkpointing
