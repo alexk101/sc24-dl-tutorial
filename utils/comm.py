@@ -9,6 +9,7 @@ import torch.distributed as dist
 import datetime as dt
 from typing import Union
 from mpi4py import MPI
+import datetime
 
 # dummy placeholder
 _COMM_GROUPS = {}
@@ -159,6 +160,7 @@ def init_process_group_mpi():
                 init_method='env://',
                 rank=global_rank,
                 world_size=world_size,
+                timeout=datetime.timedelta(minutes=3)
             )
 
 
