@@ -168,6 +168,9 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     # create model
     model = vit.ViT(params).to(device)
 
+    if params.enable_jit:
+        model = torch.compile(model)
+
     if params.gradient_checkpointing:
         model.enable_checkpointing()
         if world_rank == 0:
