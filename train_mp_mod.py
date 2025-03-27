@@ -697,7 +697,7 @@ if __name__ == "__main__":
     if args.patch_size is not None:
         params.patch_size = args.patch_size
 
-    assert args.output_dir is not None, "Output directory must be specified"
+    # assert args.output_dir is not None, "Output directory must be specified"
     ########
 
     # Update config with modified args
@@ -770,6 +770,8 @@ if __name__ == "__main__":
         baseDir = Path(SCRATCH) / 'scaling_logs'
         if not baseDir.exists():
             baseDir.mkdir(exist_ok=True, parents=True)
+        if args.output_dir is None:
+            args.output_dir = str(len(list(baseDir.iterdir()))).zfill(3)
         expDir: Path = baseDir / args.output_dir
         expDir.mkdir()
         params.experiment_dir = os.path.abspath(expDir)
