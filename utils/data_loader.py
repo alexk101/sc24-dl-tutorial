@@ -17,26 +17,33 @@ def worker_init(wrk_id):
 def get_data_loader(params, files_pattern, distributed, train):
     dataset = ERA5Dataset(params, files_pattern, train)
 
+    drop_last = True
     if distributed:
         if hasattr(params, 'data_num_shards'):
             # this is for model parallelism
             assert hasattr(params, 'data_shard_id'), 'please set data_num_shards and data_shard_id'
             sampler = DistributedSampler(dataset, shuffle=train, num_replicas=params.data_num_shards, rank=params.data_shard_id)
+            
+            # For validation, check if we need to keep partial batches
+            if not train:
+                samples_per_rank = len(dataset) // params.data_num_shards
+                if samples_per_rank < params.local_batch_size:
+                    drop_last = False
+                    logging.info(f"Disabling drop_last for validation: {samples_per_rank} samples per rank < {params.local_batch_size} batch size")
         else:
             sampler = DistributedSampler(dataset, shuffle=train)
     else:
         sampler = None
 
-    
     dataloader = DataLoader(dataset,
-                            batch_size=int(params.local_batch_size),
-                            num_workers=params.num_data_workers,
-                            shuffle=(sampler is None),
-                            sampler=sampler,
-                            worker_init_fn=worker_init,
-                            drop_last=True,
-                            persistent_workers=train,
-                            pin_memory=torch.cuda.is_available())
+                          batch_size=int(params.local_batch_size),
+                          num_workers=params.num_data_workers,
+                          shuffle=(sampler is None),
+                          sampler=sampler,
+                          worker_init_fn=worker_init,
+                          drop_last=drop_last,
+                          persistent_workers=train,
+                          pin_memory=torch.cuda.is_available())
 
     if train:
         return dataloader, dataset, sampler
