@@ -56,6 +56,10 @@ cd $SLURM_SUBMIT_DIR
 CONDA_BASE=/sw/frontier/miniforge3/23.11.0-0
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 
+# Store the arguments before activating conda
+PYTHON_ARGS=("$@")
+
+# Activate conda environment
 source ${CONDA_BASE}/bin/activate
 conda activate ${CONDA_ENV_PATH}
 
@@ -65,8 +69,5 @@ source export_DDP_vars.sh
 source export_frontier_vars.sh
 export MASTER_PORT=3442 # default from torch launcher
 
-# Store the arguments in a variable
-PYTHON_ARGS="$@"
-
 # Run the command with proper argument handling
-srun -n $((SLURM_JOB_NUM_NODES*8)) ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${PYTHON_ARGS} --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
+srun -n $((SLURM_JOB_NUM_NODES*8)) ${CONDA_ENV_PATH}/bin/python train_mp_mod.py "${PYTHON_ARGS[@]}" --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
