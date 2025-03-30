@@ -54,12 +54,16 @@ export HDF5_USE_FILE_LOCKING=FALSE
 cd $SLURM_SUBMIT_DIR
 
 # Location of the conda environment
+CONDA_BASE=/sw/frontier/miniforge3/23.11.0-0
 CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
-source activate ${CONDA_ENV_PATH}
+
+source ${CONDA_BASE}/bin/activate
+conda activate ${CONDA_ENV_PATH}
 
 set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
 export MASTER_PORT=3442 # default from torch launcher
-srun -n $((SLURM_JOB_NUM_NODES*8)) ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq 100
+srun -n $((SLURM_JOB_NUM_NODES*8)) ${CONDA_ENV_PATH}/bin/python train_mp_mod.py \
+    ${args} --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
