@@ -66,4 +66,4 @@ source export_frontier_vars.sh
 export MASTER_PORT=3442 # default from torch launcher
 
 # Run the command with proper argument handling
-srun -n $((SLURM_JOB_NUM_NODES*8)) ${CONDA_ENV_PATH}/bin/python train_mp_mod.py "${PYTHON_ARGS[@]}" --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
+srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py "${PYTHON_ARGS[@]}" --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
