@@ -5,6 +5,7 @@ export NCCL_SOCKET_IFNAME=hsn0
 export NCCL_SOCKET_FAMILY=ipv4
 export NCCL_CROSS_NIC=1       # On large systems, this NCCL setting has been found to improve perf
 export NCCL_IB_HCA=hsn0
+export NCCL_PROTO=Simple
 
 # Use job-specific temporary directory for NCCL
 export NCCL_TEMP_DIR="/tmp/nccl-${SLURM_JOB_ID}"
