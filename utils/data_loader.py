@@ -87,8 +87,8 @@ class ERA5Dataset(Dataset):
         logging.info("Found data at path {}. Number of examples: {}. Image Shape: {} x {} x {}".format(self.location, self.n_samples_total, self.img_shape_x, self.img_shape_y, self.n_in_channels))
 
     def _open_file(self, year_idx):
-        _file = h5py.File(self.files_paths[year_idx], 'r')
-        self.files[year_idx] = _file['fields']  
+        with h5py.File(self.files_paths[year_idx], 'r') as _file:
+            self.files[year_idx] = _file['fields']
     
     def __len__(self):
         return self.n_samples_total
