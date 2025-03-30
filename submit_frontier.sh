@@ -6,7 +6,7 @@
 #SBATCH -t 00:30:00
 #SBATCH --signal=B:USR1@60  # Send signal 10 minutes before time limit
 #SBATCH -o %x-%j.out
-#SBATCH --gpus-per-node=8
+#SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
 #SBATCH --cpus-per-task=7
 #SBATCH --gpu-bind=closest
