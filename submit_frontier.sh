@@ -9,12 +9,16 @@
 #SBATCH --gpus-per-node 8
 #SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
 #SBATCH --gpus-per-task=1
+#SBATCH --cpus-per-task=7
 #SBATCH --gpu-bind=closest
+
+ROCM_VERSION=6.2.4
+export LD_LIBRARY_PATH=/opt/rocm-${ROCM_VERSION}/lib:$LD_LIBRARY_PATH
 
 module purge
 module load PrgEnv-gnu/8.5.0
 module load miniforge3/23.11.0-0
-module load rocm/6.2.4
+module load rocm/${ROCM_VERSION}
 module load craype-accel-amd-gfx90a
 module load cray-hdf5-parallel/1.12.2.11
 module load libfabric/1.22.0
@@ -38,10 +42,9 @@ export LD_LIBRARY_PATH=/ccs/home/kiefera/scratch/rccl/aws-ofi-rccl/lib:$LD_LIBRA
 
 # Needed to bypass MIOpen, Disk I/O Errors
 export MIOPEN_USER_DB_PATH="/tmp/my-miopen-cache-$SLURM_JOB_ID"
-export MIOPEN_CUSTOM_CACHE_DIR=${MIOPEN_USER_DB_PATH}
-rm -rf ${MIOPEN_USER_DB_PATH}
 mkdir -p ${MIOPEN_USER_DB_PATH}
-# export MIOPEN_DISABLE_CACHE=1
+export MIOPEN_CUSTOM_CACHE_DIR=${MIOPEN_USER_DB_PATH}
+export MIOPEN_DISABLE_CACHE=1
 
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
@@ -59,4 +62,5 @@ set -x
 source export_DDP_vars.sh
 source export_frontier_vars.sh
 export MASTER_PORT=3442 # default from torch launcher
-srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq 100
+export OMP_NUM_THREADS=7
+srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
