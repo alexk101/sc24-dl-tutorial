@@ -87,6 +87,20 @@ def save_and_exit(model, optimizer, scheduler, iters, params, args, world_rank):
         if world_rank == 0:
             save_checkpoint(model, optimizer, scheduler, iters, params, args, world_rank)
             logging.info("Time limit approaching - saved checkpoint and exiting")
+        if params.distributed:
+            # Destroy all process groups to ensure clean exit
+            torch.distributed.barrier()  # Ensure all processes reach this point
+            
+            # Get all process groups from comm
+            for group_name in ["tp", "cp", "dp"]:
+                group = comm.get_group(group_name)
+                if group is not None:
+                    torch.distributed.destroy_process_group(group)
+            
+            # Finally destroy the default process group
+            torch.distributed.destroy_process_group()
+            
+            logging.info(f"Rank {world_rank}: Successfully destroyed all process groups")
         sys.exit(0)
     except Exception as e:
         logging.error(f"Error during save_and_exit: {e}")
