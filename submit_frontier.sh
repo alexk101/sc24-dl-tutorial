@@ -6,7 +6,7 @@
 #SBATCH -t 00:30:00
 #SBATCH --signal=B:USR1@60  # Send signal 10 minutes before time limit
 #SBATCH -o %x-%j.out
-#SBATCH --gres=gpu:8
+#SBATCH --gpus-per-node=8
 #SBATCH --ntasks-per-node=8  # Changed from 1 to 8 for MI250X GPUs
 #SBATCH --cpus-per-task=7
 #SBATCH --gpu-bind=closest
@@ -47,7 +47,6 @@ mkdir -p $MIOPEN_USER_DB_PATH
 
 LOGDIR=${SCRATCH}/sc24-dl-tutorial/logs
 mkdir -p ${LOGDIR}
-args="${@}"
 
 export OMP_NUM_THREADS=7
 export HDF5_USE_FILE_LOCKING=FALSE
@@ -65,5 +64,9 @@ set -x
 source export_DDP_vars.sh
 source export_frontier_vars.sh
 export MASTER_PORT=3442 # default from torch launcher
-srun -n $((SLURM_JOB_NUM_NODES*8)) ${CONDA_ENV_PATH}/bin/python train_mp_mod.py \
-    ${args} --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
+
+# Store the arguments in a variable
+PYTHON_ARGS="$@"
+
+# Run the command with proper argument handling
+srun -n $((SLURM_JOB_NUM_NODES*8)) ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${PYTHON_ARGS} --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
