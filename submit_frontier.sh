@@ -62,4 +62,4 @@ set -x
 source export_DDP_vars.sh
 source export_frontier_vars.sh
 export MASTER_PORT=3442 # default from torch launcher
-srun -n $((SLURM_JOB_NUM_NODES*8))${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq 100
+srun -n $((SLURM_JOB_NUM_NODES*8)) ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq 100
