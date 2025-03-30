@@ -59,10 +59,6 @@ CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
 # Store the arguments before activating conda
 PYTHON_ARGS=("$@")
 
-# Activate conda environment
-source ${CONDA_BASE}/bin/activate
-conda activate ${CONDA_ENV_PATH}
-
 set -x
 
 source export_DDP_vars.sh
