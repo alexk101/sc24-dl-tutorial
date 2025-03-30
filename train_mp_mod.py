@@ -323,15 +323,11 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             optimizer.zero_grad()
 
             # Inside the training loop, before forward pass
-            logging.info(f"Rank {world_rank} waiting for TP group sync before forward at iter {iters}")
             torch.distributed.barrier(group=comm.get_group("tp"))
-            logging.info(f"Rank {world_rank} passed TP group sync before forward at iter {iters}")
 
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
-                logging.info(f"Rank {world_rank} starting forward pass for iter {iters}")
                 loss = loss_func(gen, tar)
-                logging.info(f"Rank {world_rank} completed forward pass for iter {iters}")
 
             if world_rank == 0 and i == 1:  # print the mem used
                 gpu_info = get_gpu_info(local_rank)
@@ -344,9 +340,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
                 scaler.update()
             else:
                 # Replace with timing instrumentation
-                logging.info(f"Rank {world_rank} starting backward timing pass for iter {iters}")
                 timing_stats = backward_with_comm_timing(loss, optimizer)
-                logging.info(f"Rank {world_rank} completed backward timing pass for iter {iters}")
                 if world_rank == 0 and iters % params.logging_freq == 0:
                     logging.info(f"Backward timing: compute={timing_stats['backward_compute_time']:.4f}s, "
                                  f"comm={timing_stats['comm_time']:.4f}s, "
@@ -363,9 +357,7 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             scheduler.step()
 
             # After backward pass but before the iteration ends
-            logging.info(f"Rank {world_rank} waiting for TP group sync after backward at iter {iters}")
             torch.distributed.barrier(group=comm.get_group("tp"))
-            logging.info(f"Rank {world_rank} passed TP group sync after backward at iter {iters}")
 
             tr_end = time.time()
             tr_time += tr_end - tr_start
@@ -374,14 +366,10 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             # First synchronize within data parallel groups
             if params.distributed:
-                logging.info(f"Rank {world_rank} waiting for DP group sync at end of iter {iters}")
                 torch.distributed.barrier(group=comm.get_group("dp"))
-                logging.info(f"Rank {world_rank} passed DP group sync at end of iter {iters}")
 
                 # Then do a global sync
-                logging.info(f"Rank {world_rank} waiting for global sync at end of iter {iters}")
                 torch.distributed.barrier()  # Global barrier
-                logging.info(f"Rank {world_rank} passed global sync at end of iter {iters}")
 
             iters += 1
 
@@ -418,12 +406,10 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             # Check remaining time periodically
             if iters % time_check_freq == 0:
-                logging.info(f"Rank {world_rank} checking remaining time for iter {iters}")
                 if world_rank == 0:
                     remaining_time = torch.tensor(get_remaining_time(), device=device)
                 else:
                     remaining_time = torch.tensor(0.0, device=device)
-                logging.info(f"Rank {world_rank} broadcasting remaining time for iter {iters}")
                 if params.distributed:
                     torch.distributed.broadcast(remaining_time, src=0)
                 
@@ -470,7 +456,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             loss_func, world_rank, comm if params.distributed else None
         )
         val_end = time.time()
-        logging.info(f"Rank {world_rank} completed validation")
         if world_rank == 0:
             elapsed_time = time.time() - start_time
             remaining_time = get_remaining_time()

@@ -35,7 +35,7 @@ def get_data_loader(params, files_pattern, distributed, train):
                             sampler=sampler,
                             worker_init_fn=worker_init,
                             drop_last=True,
-#                            persistent_workers=train,
+                            persistent_workers=train,
                             pin_memory=torch.cuda.is_available())
 
     if train:
