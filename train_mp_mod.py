@@ -251,6 +251,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # Log initial loss on train and validation to tensorboard
     with torch.no_grad():
+        # Log validation data distribution
+        if world_rank == 0:
+            logging.info(f"Validation dataset size: {len(val_data_loader.dataset)}")
+            logging.info(f"Number of validation batches: {len(val_data_loader)}")
+            logging.info(f"Local batch size: {params.local_batch_size}")
+            logging.info(f"Number of data shards: {params.data_num_shards}")
+            logging.info(f"Samples per rank: {len(val_data_loader.dataset) // params.data_num_shards}")
+        
         inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
         gen = model(inp)
         tr_loss = loss_func(gen, tar)
