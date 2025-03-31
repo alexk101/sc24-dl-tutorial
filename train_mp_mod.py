@@ -300,36 +300,15 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             loss.backward()
         return flop_counter.get_total_flops()
 
-    # Synchronize all ranks before FLOP counting
-    if params.distributed:
-        torch.distributed.barrier()
-    
-    # Ensure consistent model state across ranks
+    # Get sample input and count FLOPs
     model.train()
-    if params.distributed:
-        torch.distributed.barrier()
-    
-    # Get sample input and ensure all ranks have it
     sample_input = next(iter(train_data_loader))[0].to(device)
-    if params.distributed:
-        torch.distributed.barrier()
-    
-    # Count FLOPs
     flops_per_step = count_training_flops(model, sample_input, loss_func, world_rank)
     total_flops = 0
 
-    # Synchronize FLOP counts across ranks
-    if params.distributed:
-        flops_tensor = torch.tensor(flops_per_step, device=device)
-        torch.distributed.all_reduce(flops_tensor, op=ReduceOp.AVG)
-        flops_per_step = flops_tensor.item()
-
+    # Only synchronize if we need to report FLOPs
     if world_rank == 0:
         logging.info(f"FLOPs per training step: {flops_per_step:,}")
-
-    # Final synchronization before training loop
-    if params.distributed:
-        torch.distributed.barrier()
 
     # Training loop
     for epoch in range(startEpoch, startEpoch + params.num_epochs):

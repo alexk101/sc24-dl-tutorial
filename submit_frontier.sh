@@ -62,5 +62,8 @@ source export_DDP_vars.sh
 source export_frontier_vars.sh
 export HDF5_USE_FILE_LOCKING=TRUE # need this on Frontier
 export MASTER_PORT=3442 # default from torch launcher
-export OMP_NUM_THREADS=7
-srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq 100 --num_data_workers ${OMP_NUM_THREADS}
+
+export OMP_NUM_THREADS=4  # Reduced from 7
+export MKL_NUM_THREADS=4  # Add this to control MKL threads
+
+srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq 100 --num_data_workers 2
