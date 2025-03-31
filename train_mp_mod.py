@@ -251,50 +251,19 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
     # Log initial loss on train and validation to tensorboard
     with torch.no_grad():
-        # Only rank 0 does initial validation
+        inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
+        gen = model(inp)
+        tr_loss = loss_func(gen, tar)
+        inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
+        gen = model(inp)
+        val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
+        if params.distributed:
+            torch.distributed.all_reduce(
+                tr_loss, op=ReduceOp.AVG, group=comm.get_group("dp")
+            )
         if world_rank == 0:
-            inp, tar = map(lambda x: x.to(device), next(iter(train_data_loader)))
-            gen = model(inp)
-            tr_loss = loss_func(gen, tar)
-            inp, tar = map(lambda x: x.to(device), next(iter(val_data_loader)))
-            gen = model(inp)
-            val_loss, val_rmse, valid_steps = validate_model(model, val_data_loader, device, params, loss_func, world_rank, comm)
-            
-            # Broadcast results to other ranks
-            if params.distributed:
-                tr_loss_tensor = torch.tensor(tr_loss.item(), device=device)
-                val_loss_tensor = torch.tensor(val_loss.item(), device=device)
-                val_rmse_tensor = val_rmse.clone()
-                
-                torch.distributed.broadcast(tr_loss_tensor, src=0)
-                torch.distributed.broadcast(val_loss_tensor, src=0)
-                torch.distributed.broadcast(val_rmse_tensor, src=0)
-                
-                tr_loss = tr_loss_tensor.item()
-                val_loss = val_loss_tensor.item()
-                val_rmse = val_rmse_tensor
-        else:
-            # Other ranks receive the results
-            if params.distributed:
-                tr_loss_tensor = torch.tensor(0.0, device=device)
-                val_loss_tensor = torch.tensor(0.0, device=device)
-                val_rmse_tensor = torch.zeros((params.n_out_channels), dtype=torch.float32, device=device)
-                
-                torch.distributed.broadcast(tr_loss_tensor, src=0)
-                torch.distributed.broadcast(val_loss_tensor, src=0)
-                torch.distributed.broadcast(val_rmse_tensor, src=0)
-                
-                tr_loss = tr_loss_tensor.item()
-                val_loss = val_loss_tensor.item()
-                val_rmse = val_rmse_tensor
-            else:
-                tr_loss = torch.tensor(0.0, device=device)
-                val_loss = torch.tensor(0.0, device=device)
-                val_rmse = torch.zeros((params.n_out_channels), dtype=torch.float32, device=device)
-
-        if world_rank == 0:
-            args.tboard_writer.add_scalar("Loss/train", tr_loss, 0)
-            args.tboard_writer.add_scalar("Loss/valid", val_loss, 0)
+            args.tboard_writer.add_scalar("Loss/train", tr_loss.item(), 0)
+            args.tboard_writer.add_scalar("Loss/valid", val_loss.item(), 0)
             args.tboard_writer.add_scalar(
                 "RMSE(u10m)/valid", val_rmse.cpu().numpy()[0], 0
             )
