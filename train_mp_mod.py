@@ -338,9 +338,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
             b_size = inp.size(0)
             optimizer.zero_grad()
 
-            # Inside the training loop, before forward pass
-            torch.distributed.barrier(group=comm.get_group("tp"))
-
             with autocast(device_type=device_type, enabled=params.amp_enabled, dtype=params.amp_dtype):
                 gen = model(inp)
                 loss = loss_func(gen, tar)
@@ -372,20 +369,14 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
 
             scheduler.step()
 
-            # After backward pass but before the iteration ends
-            torch.distributed.barrier(group=comm.get_group("tp"))
-
             tr_end = time.time()
             tr_time += tr_end - tr_start
             dat_time += tr_start - dat_start
             step_count += 1
 
-            # First synchronize within data parallel groups
+            # Single synchronization point after the iteration
             if params.distributed:
-                torch.distributed.barrier(group=comm.get_group("dp"))
-
-                # Then do a global sync
-                torch.distributed.barrier()  # Global barrier
+                torch.distributed.barrier()  # Global barrier only
 
             iters += 1
 
