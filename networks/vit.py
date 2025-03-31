@@ -220,9 +220,9 @@ class VisionTransformer(nn.Module):
 
         # apply head
         x = self.head(x)
-        x = x.reshape(B, h, w, self.patch_size, self.patch_size, self.out_ch)
+        x = x.reshape(shape=(B, h, w, self.patch_size, self.patch_size, self.out_ch))
         x = torch.einsum("nhwpqc->nchpwq", x)
-        x = x.reshape(B, self.out_ch, self.img_size[0], self.img_size[1])
+        x = x.reshape(shape=(B, self.out_ch, self.img_size[0], self.img_size[1]))
         
         return x
  
