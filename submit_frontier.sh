@@ -53,7 +53,7 @@ args="${@}"
 cd $SLURM_SUBMIT_DIR
 
 # Location of the conda environment
-CONDA_ENV_PATH=/ccs/home/kiefera/.conda/envs/pytorch
+CONDA_ENV_PATH=/lustre/orion/geo163/world-shared/pytorch
 source activate ${CONDA_ENV_PATH}
 
 set -x
@@ -66,4 +66,4 @@ export MASTER_PORT=3442 # default from torch launcher
 export OMP_NUM_THREADS=4  # Reduced from 7
 export MKL_NUM_THREADS=4  # Add this to control MKL threads
 
-srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq 100 --num_data_workers 2
+srun ${CONDA_ENV_PATH}/bin/python train_mp_mod.py ${args} --checkpoint_freq=100 --num_data_workers=2
