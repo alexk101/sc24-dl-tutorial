@@ -12,3 +12,4 @@ mkdir -p $NCCL_TEMP_DIR
 
 # Ensure we use the correct network interface
 export NCCL_NET_GDR_LEVEL=3
+export NCCL_PROTO=Simple

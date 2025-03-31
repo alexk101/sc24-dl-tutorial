@@ -787,16 +787,16 @@ if __name__ == "__main__":
         
         hparams = {
             'exp_name': args.exp_name,
-            'embed': args.scale_dim,
-            'layers': args.scale_depth,
-            'heads': args.scale_heads,
-            'train_years': args.n_train,
+            'embed': params.embed_dim,
+            'layers': params.depth,
+            'heads': params.num_heads,
+            'train_years': params.n_train,
             'dtype': str(amp_dtype),
             'n_nodes': args.n_nodes,
             'time_limit': args.time_limit,
-            'local_batch_size': args.local_batch_size,
-            'learning_rate': args.learning_rate,
-            'patch_size': args.patch_size,
+            'local_batch_size': params.local_batch_size,
+            'learning_rate': params.lr,
+            'patch_size': params.patch_size,
         }
         with open(expDir/'hparams.json', "w") as f:
             json.dump(hparams, f)
