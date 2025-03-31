@@ -60,6 +60,8 @@ set -x
 
 source export_DDP_vars.sh
 source export_frontier_vars.sh
+export TRITON_HOME=/lustre/orion/geo163/world-shared/triton
+mkdir -p ${TRITON_HOME}
 export HDF5_USE_FILE_LOCKING=TRUE # need this on Frontier
 export MASTER_PORT=3442 # default from torch launcher
 

@@ -160,7 +160,7 @@ def init_process_group_mpi():
                 init_method='env://',
                 rank=global_rank,
                 world_size=world_size,
-                timeout=datetime.timedelta(minutes=3)
+                timeout=datetime.timedelta(minutes=5)
             )
 
 
