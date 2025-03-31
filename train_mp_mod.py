@@ -185,7 +185,6 @@ def train(params, args, local_rank, world_rank, world_size, hyperparameter_searc
     if params.enable_jit:
         torch.set_float32_matmul_precision('high')
         # Enable detailed debugging
-        import torch._dynamo
         torch._dynamo.config.verbose = True
         torch._dynamo.config.log_level = logging.DEBUG
         model = torch.compile(model)
